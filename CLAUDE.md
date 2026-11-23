@@ -2,7 +2,7 @@
 Generador de proyectos para Claude Code: crea ~/projects/personal|work/<slug> con docs, reglas, skills y subagente goldfish adaptados al Tier y al stack. Repo público.
 
 ## Comandos
-- Generar: `bin/new-project <slug> --tipo personal|work --tier 0-3 [--stack nextjs,supabase] [--dry-run]`
+- Generar: `bin/new-project <slug> --tipo personal|work --tier 0-3 [--stack nextjs,supabase] [--visibilidad publico|anonimizado|privado] [--dry-run]`
 - Comparar un proyecto con el starter: `bin/starter-diff <ruta-del-proyecto>`
 - Test: `tests/smoke.sh` · Lint: `shellcheck bin/* lib/*.sh tests/*.sh` (si está instalado)
 

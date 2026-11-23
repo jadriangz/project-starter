@@ -40,7 +40,7 @@ La v0.1 se da por lograda cuando se cumplen estos seis resultados medibles.
 
 **Funcionales (historias breves)**
 
-1. Como Adrián, ejecuto `new-project <slug> --tipo personal|work --tier N [--stack a,b]` y obtengo `~/projects/<tipo>/<slug>` con git inicializado y un primer commit.
+1. Como Adrián, ejecuto `new-project <slug> --tipo personal|work --tier N [--stack a,b] [--visibilidad publico|anonimizado|privado]` y obtengo `~/projects/<tipo>/<slug>` con git inicializado y un primer commit.
 2. El `CLAUDE.md` generado trae la metodología del Tier y los comandos del stack elegido, sin placeholders sin resolver.
 3. Reviso un diseño (`/revisar-diseno`, Tier 2+) o un diff (`/revisar-diff`, Tier 1+) con un goldfish usando un solo comando.
 4. `/hito N` propone el plan solo del hito N; `/cierre-hito` corre los checks, actualiza el plan y la bitácora, y no commitea.
@@ -59,11 +59,20 @@ La v0.1 se da por lograda cuando se cumplen estos seis resultados medibles.
 
 ## 5. Arquitectura y stack
 
-El starter es un repo de bash y markdown sin dependencias, con la plantilla en capas aditivas: `new-project` las combina según Tier y stack y registra el resultado en un lock. Tier 0 usa solo `core`; Tier N suma `t1` hasta `tN`.
+El starter es un repo de bash y markdown sin dependencias. La plantilla está en capas: `new-project` combina `core`, `t1` … `tN` según el Tier, añade los perfiles del stack y registra el resultado en un lock. La v0.1 no fusiona archivos: una capa superior reemplaza el archivo de la misma ruta, y los únicos añadidos de texto son los fragmentos descritos abajo.
 
-&#91;embedded content: generación y comparación · 4 cajas\]
+```text
+new-project <slug> --tipo T --tier N [--stack a,b] [--visibilidad V] [--dry-run]
+  │  valida todo (nada se escribe si algo falla)
+  ▼
+core → t1 → … → tN → perfiles        capa superior reemplaza la misma ruta; perfiles no colisionan
+  │  render: fragmentos y placeholders, en un directorio temporal
+  ▼
+.claude/starter.lock → mv al destino → git init + primer commit → imprime `git remote add`
 
-`starter-diff` compara tres hashes por archivo: el del proyecto hoy (P), el del lock (L) y el del starter hoy (S).
+starter-diff <ruta>
+  lee el lock → recompone el starter actual con tier y stack del lock (S) → compara P, L y S
+```
 
 ```text
 project-starter/
@@ -72,30 +81,82 @@ project-starter/
 ├── bin/
 │   ├── new-project            # generador
 │   └── starter-diff           # compara un proyecto con el starter
-├── lib/common.sh              # validación, copia, hashes, placeholders
+├── lib/common.sh              # validación, composición, hashes, placeholders
 ├── template/
-│   ├── core/                  # todos los Tiers: .gitignore, settings.json, brief, CLAUDE.md corto
-│   ├── t1/                    # CLAUDE.md completo, spec, plan, bitacora, agente y skills
-│   ├── t2/                    # docs/adr/, PRD, skill revisar-diseno
-│   ├── t3/                    # CHANGELOG del proyecto y sección de gobierno
-│   └── profiles/<perfil>/     # nextjs, supabase, odoo-addon: reglas con paths + comandos
+│   ├── core/                  # todos los Tiers
+│   ├── t1/                    # Tier 1+
+│   ├── t2/                    # Tier 2+
+│   ├── t3/                    # Tier 3
+│   └── profiles/<perfil>/     # nextjs, supabase, odoo-addon
 ├── tests/                     # smoke.sh y fixtures con defectos conocidos
 └── docs/                      # dossier.md, plan.md, verificacion.md
 ```
 
+**Archivos por capa** (normativo; M = managed, S = seeded, ver sección 6). Un proyecto de Tier N recibe `core` y `t1` hasta `tN`, más los perfiles de su stack.
+
+| Capa | Ruta en el proyecto | Fuente en `template/` | Lock |
+| --- | --- | --- | --- |
+| core | `CLAUDE.md` (corto, unas 10 líneas) | `core/CLAUDE.md.tmpl` | S |
+| core | `.gitignore` | `core/dot-gitignore` | S |
+| core | `.gitattributes` (`* text=auto eol=lf`) | `core/dot-gitattributes` | S |
+| core | `.claude/settings.json` | `core/dot-claude/settings.json` | S |
+| core | `docs/brief.md` | `core/docs/brief.md` | S |
+| t1 | `CLAUDE.md` (completo, reemplaza al de core) | `t1/CLAUDE.md.tmpl` | S |
+| t1 | `docs/spec.md`, `docs/plan.md`, `docs/bitacora.md` | `t1/docs/…` | S |
+| t1 | `.claude/agents/goldfish-revisor.md` | `t1/dot-claude/agents/…` | M |
+| t1 | `.claude/skills/{hito,cierre-hito,revisar-diff,bitacora}/SKILL.md` | `t1/dot-claude/skills/…` | M |
+| t2 | `docs/prd.md`, `docs/adr/0000-plantilla.md` | `t2/docs/…` | S |
+| t2 | `.claude/skills/revisar-diseno/SKILL.md` | `t2/dot-claude/skills/…` | M |
+| t3 | `CHANGELOG.md` | `t3/CHANGELOG.md` | S |
+| t3 | Sección de gobierno dentro de `CLAUDE.md` (no es archivo) | `t3/_fragmentos/gobierno.md` | (en `CLAUDE.md`) |
+| perfil `p` | `.claude/rules/stack-p.md` (con `paths:`) | `profiles/p/dot-claude/rules/stack-p.md` | M |
+| perfil `p` | Comandos del stack dentro de `CLAUDE.md`, solo Tier 1+ | `profiles/p/_fragmentos/comandos.md` | (en `CLAUDE.md`) |
+
+Además se genera `.claude/starter.lock`, que no se lista a sí mismo. Un perfil solo puede aportar su regla y su fragmento. El `CLAUDE.md` de core no referencia archivos que Tier 0 no tiene (`docs/spec.md`, `docs/plan.md`). Los nombres del agente y de los skills son contrato; su frontmatter es provisional hasta el spike del Hito 2, y todos los skills llevan `disable-model-invocation: true`.
+
+**Reglas de composición**
+
+- **Destino:** `$PROJECTS_ROOT/<tipo>/<slug>`. `PROJECTS_ROOT` es una variable de entorno, con `~/projects` por defecto. La carpeta padre `$PROJECTS_ROOT/<tipo>` debe existir; el generador no la crea.
+- **Rutas:** la ruta dentro de la capa es la ruta en el proyecto, con dos transformaciones: un segmento `dot-x` pasa a `.x` y el sufijo `.tmpl` se quita. Así la plantilla no contiene `.claude/`, `.gitignore` ni `CLAUDE.md` reales, que Claude Code y git aplicarían al propio repo del starter.
+- **Colisiones:** entre capas, la superior reemplaza el archivo completo. Una ruta repetida entre perfiles, entre un perfil y una capa, o dentro de una misma capa (por ejemplo `CLAUDE.md` y `CLAUDE.md.tmpl`), termina con error. Un `.claude/`, `.gitignore` o `CLAUDE.md` real dentro de `template/` también es error.
+- **Fragmentos:** los directorios `_fragmentos/` no se copian. Una línea cuyo único contenido es `{{GOBIERNO}}` o `{{COMANDOS_STACK}}` se sustituye por el fragmento correspondiente (los de comandos, concatenados en el orden normalizado de `stack`, sin separador); si no hay fragmento, la línea se elimina. Ambas líneas están solo en `t1/CLAUDE.md.tmpl`; `core/CLAUDE.md.tmpl` no las contiene, y por eso Tier 0 no recibe comandos ni gobierno.
+- **Placeholders:** sintaxis `{{NOMBRE}}`, con `NOMBRE` en `[A-Z_]+`. Variables: `SLUG`, `TIPO`, `TIER`, `METODOLOGIA`, `STACK` (vacío si no hay stack), `VISIBILIDAD` y `FECHA` (`YYYY-MM-DD`, UTC, del mismo instante que `generated_at`). Se renderizan todos los seeded: primero se insertan los fragmentos y después se resuelven los placeholders. `.tmpl` solo sirve para ocultar archivos a Claude Code y no indica qué se renderiza. Un managed que contenga `{{` es error al componer; un `{{` que quede tras el render es error.
+- **Metodología:** se deriva del Tier: 0 → `ninguna`, 1 → `eg-ligero`, 2 y 3 → `eg`.
+- **Visibilidad:** `--visibilidad publico|anonimizado|privado`. Por defecto, `personal` → `publico` y `work` → `privado`. En la v0.1 solo se registra en el lock; la usa `/bitacora`.
+
+**Algoritmo de `new-project`**
+
+1. Leer argumentos: `<slug>`, `--tipo` y `--tier` obligatorios; `--stack`, `--visibilidad` y `--dry-run` opcionales. Una opción desconocida es error.
+2. Validar sin escribir nada:
+   - slug con `^[a-z0-9]+(-[a-z0-9]+)*$` y 64 caracteres como máximo;
+   - `tipo` en {personal, work}; `tier` en {0, 1, 2, 3}; `visibilidad` en {publico, anonimizado, privado};
+   - `stack` separado por comas; cada perfil cumple la misma regex del slug y existe en `template/profiles/`; se normaliza (minúsculas, orden `LC_ALL=C`, sin duplicados) y esa forma se usa en todo: lock, `{{STACK}}` y orden de fragmentos;
+   - existen `git` (2.28 o superior, por `init -b`) y `sha256sum`; existe la carpeta padre; no existe el destino.
+3. Componer la lista de fuentes (capas y perfiles) aplicando las reglas de rutas y colisiones, y comprobar que ningún managed contiene `{{`. Hasta aquí no se ha escrito nada.
+4. Crear un directorio temporal con `mktemp -d` dentro de la carpeta padre (con `--dry-run`, en `$TMPDIR`) y registrar su borrado con `trap`. Desde aquí, cualquier error borra el temporal y deja el disco como estaba.
+5. Escribir cada archivo: los seeded con fragmentos y placeholders resueltos; los managed, copiados sin cambios.
+6. Escribir `.claude/starter.lock` (sección 6).
+7. Con `--dry-run`: imprimir la lista de rutas (ordenada) y el lock, borrar el temporal y salir con 0.
+8. Ajustar los permisos del temporal según la umask (`mktemp -d` lo crea con 0700), volver a comprobar que el destino no existe y moverlo con `mv -T`. Límite conocido: un directorio vacío creado justo entre la comprobación y el `mv` sería reemplazado.
+9. En el destino: `git init -b main`, `git add -A` y un commit con el mensaje `chore: proyecto generado por project-starter v<VERSION>`. El commit se hace después de mover porque la identidad de git depende de `includeIf gitdir:` sobre la ruta final. Si `git` falla, se borra el destino que creó esta misma ejecución y se sale con error.
+10. Imprimir `git remote add origin git@github-<tipo>:<OWNER>/<slug>.git`, donde `github-<tipo>` es el alias de host de SSH y `OWNER` es `jadriangz` en `personal`; en `work` es el valor de la variable de entorno `STARTER_WORK_OWNER` o, si no existe, el literal `<ORG>` (el repo es público y no guarda el nombre de la organización). No toca la red.
+
+Los errores van a stderr y terminan con código distinto de 0. Las opciones se escriben como `--opcion valor`.
+
 | Decisión | Elegido | Alternativa descartada | Por qué |
 | --- | --- | --- | --- |
 | Modelo de uso | Generador + lock | Clonar por proyecto; template de GitHub | Evita historial y archivos sobrantes, permite `starter-diff` y las mejoras llegan con `git pull` |
-| Lenguaje del generador | Bash puro | CLI en Python o Node | Cero dependencias en WSL. Si supera unas 300 líneas o necesita merge, migrar a Python stdlib |
-| Plantilla | Capas aditivas core, t1, t2, t3 | Una carpeta completa por Tier | Un cambio se hace una vez, no cuatro |
+| Lenguaje del generador | Bash puro | CLI en Python o Node | Cero dependencias en WSL. Si supera unas 300 líneas o necesita fusionar archivos, migrar a Python stdlib |
+| Plantilla | Capas core, t1, t2, t3 con reemplazo por ruta y fragmentos | Una carpeta completa por Tier | Un cambio se hace una vez, no cuatro |
 | Comandos | Skills en `.claude/skills/<nombre>/SKILL.md` | `.claude/commands/` | La documentación vigente fusionó los comandos en skills, y los skills permiten `context: fork` y `disable-model-invocation` |
 | Goldfish | Subagente `goldfish-revisor` + skills con `context: fork`; el agente usa `omitClaudeMd: true` | Pegar el prompt de la plantilla E a mano; bootstrap de terceros | Aislamiento repetible sin dependencias externas ni `gh`. Se valida en un spike del Hito 2 |
-| Manifest | `.claude/starter.lock` en texto plano | `starter.json` | JSON exige jq o Python; el formato de `sha256sum` se verifica con `sha256sum -c` |
+| Manifest | `.claude/starter.lock` en texto plano | `starter.json` | JSON exige jq o Python; la sección managed usa el formato de `sha256sum` y se verifica con `sha256sum -c` |
 | Reglas de perfil | `.claude/rules/` con `paths:` | Reglas siempre cargadas | Las reglas con `paths` cargan solo al leer archivos que coinciden |
+| Comandos del stack | Fragmento en `CLAUDE.md` (Tier 1+) | Skills por perfil | Son pocas líneas de contexto y no justifican un skill |
 | Spec y plan en CLAUDE.md | Referencia por ruta | Import con `@docs/spec.md` | Los imports cargan al inicio y no reducen el contexto |
 | Permisos base | `deny` de lectura de secretos + `ask` para commit y push | Sandbox desde la v0.1; `deny` total de push | Los `deny` de Read cubren las herramientas integradas, no cualquier subproceso. El sandbox se evalúa aparte (sección 9) |
 | Perfiles v1 | nextjs, supabase, odoo-addon | Turborepo, Python | Entran con el primer proyecto real que los pida |
-| Primer commit | Lo crea el generador | Repo sin commits | `/revisar-diff` necesita una base contra la cual comparar |
+| Primer commit | Lo crea el generador, después de mover | Repo sin commits; commit en el temporal | `/revisar-diff` necesita una base; la identidad de git depende de la ruta final |
 
 **Verificado en la documentación de Claude Code (23 nov 2026):**
 
@@ -103,58 +164,87 @@ project-starter/
 - [Skills](https://code.claude.com/docs/en/skills): comandos fusionados en skills; campos `disable-model-invocation`, `context: fork` y `agent`.
 - [Subagentes](https://code.claude.com/docs/en/sub-agents): carpeta `.claude/agents/`, campos `tools` y `omitClaudeMd`, contexto nuevo en cada ejecución.
 - [Memoria y reglas](https://code.claude.com/docs/en/memory): `.claude/rules/` con `paths`, imports con `@` y tamaño recomendado de CLAUDE.md.
+- Pendiente para el inicio del Hito 1: semántica de `Read(**/.env)` y de `Bash(git commit *)` sin argumentos; carga de `CLAUDE.md` anidados y descubrimiento de skills en subdirectorios (justifica `dot-` y `.tmpl`).
 
 ## 6. Datos e integraciones
 
-El único dato persistente es `.claude/starter.lock` en cada proyecto generado; la v0.1 no usa base de datos, APIs ni red.
+El único dato persistente es `.claude/starter.lock` en cada proyecto generado; la v0.1 no usa base de datos, APIs ni red. Ejemplo abreviado para un Tier 1 con stack (se omiten entradas y los hashes, de 64 caracteres hexadecimales, se acortan):
 
 ```text
-# project-starter lock: no editar a mano
+# project-starter lock: editar solo las entradas, nunca la cabecera
 schema=1
 starter_version=0.1.0
-starter_commit=<sha corto o vacío>
-slug=<slug>
-tipo=personal|work
+starter_commit=4efe395a1b2c
+slug=landing
+tipo=personal
 tier=1
 metodologia=eg-ligero
 stack=nextjs,supabase
-visibilidad=publico|anonimizado|privado
-generated_at=<UTC ISO 8601>
+visibilidad=publico
+generated_at=2026-11-23T18:04:00Z
 --managed--
-<sha256>  .claude/agents/goldfish-revisor.md
+9f2c…  .claude/agents/goldfish-revisor.md
+1a7e…  .claude/rules/stack-nextjs.md
 --seeded--
-<sha256>  CLAUDE.md
+c41b…  .claude/settings.json
+77d0…  CLAUDE.md
 ```
 
-- **managed:** archivos de los que el starter es dueño (`.claude/agents/`, `.claude/skills/`, `.claude/rules/stack-*.md`). No llevan placeholders y el proyecto no los edita; si necesita variar uno, crea un archivo propio con otro nombre.
-- **seeded:** archivos que nacen del starter y después son del proyecto (`CLAUDE.md`, `docs/*`, `.claude/settings.json`, `.gitignore`). `starter-diff` solo informa si la plantilla cambió.
+**Gramática del lock**
 
-Para cada archivo managed, `starter-diff` compara tres hashes: el del proyecto hoy (P), el del lock (L) y el del starter hoy (S).
+- Texto UTF-8 con finales de línea LF. La primera línea es el comentario literal `# project-starter lock: editar solo las entradas, nunca la cabecera`; solo se permiten comentarios `#` antes de `schema`.
+- Cabecera `clave=valor` con estas claves y en este orden: `schema`, `starter_version`, `starter_commit`, `slug`, `tipo`, `tier`, `metodologia`, `stack`, `visibilidad`, `generated_at`. Con `schema=1`, una clave desconocida, faltante, repetida o fuera de orden es error. `--managed--` va antes de `--seeded--`.
+- `starter_commit`: `git rev-parse --short=12 HEAD` del starter, con el sufijo `-dirty` si `template/` tiene cambios sin commitear; vacío si el starter no es un repo git.
+- `stack`: perfiles en minúsculas, ordenados y sin duplicados, separados por comas; `stack=` si no hay ninguno.
+- `generated_at`: `YYYY-MM-DDTHH:MM:SSZ`, en UTC.
+- Los marcadores `--managed--` y `--seeded--` se escriben siempre, aunque su sección quede vacía (Tier 0 sin perfiles no tiene managed).
+- Cada entrada es `<sha256>  <ruta relativa>` (dos espacios), ordenadas por ruta con `LC_ALL=C`. Las rutas no contienen espacios, barras invertidas ni saltos de línea.
+
+**Managed y seeded**
+
+- **managed:** las rutas que casan con `.claude/agents/**`, `.claude/skills/**` o `.claude/rules/stack-*.md`. El starter es su dueño: no llevan placeholders y el proyecto no los edita. Si necesita variar uno, crea un archivo propio con otro nombre (un skill con otro nombre es un comando adicional; una regla con otro nombre se carga junto a la original). Su hash es el del archivo copiado, idéntico al de su fuente.
+- **seeded:** todo lo demás (`CLAUDE.md`, `docs/**`, `.claude/settings.json`, `.gitignore`, `.gitattributes`, `CHANGELOG.md`). Nacen del starter y después son del proyecto. Su hash es el **del archivo de plantilla sin renderizar** (la fuente que ganó la composición), así que no coincide con el archivo del proyecto. Límite conocido: un cambio en un fragmento no cambia el hash del `CLAUDE.md` de plantilla.
+
+`sha256sum -c` se aplica solo a la sección managed, desde la raíz del proyecto. Con la sección vacía, `sha256sum -c` falla con una entrada vacía, así que la verificación se omite y se da por aprobada:
+
+```bash
+m=$(sed -n '/^--managed--$/,/^--seeded--$/{/^--/d;p}' .claude/starter.lock)
+[ -z "$m" ] || printf '%s\n' "$m" | sha256sum -c
+```
+
+**starter-diff.** S se calcula componiendo las capas del starter actual con el `tier` y el `stack` del lock. Para cada archivo managed compara el hash del proyecto hoy (P), el del lock (L) y el del starter hoy (S). Los estados se evalúan en el orden de la tabla y gana el primero que se cumple:
 
 | Estado | Condición | Acción sugerida |
 | --- | --- | --- |
+| faltante | La ruta del lock no existe en el proyecto | Restaurarla o retirar su entrada del lock |
+| retirado | La ruta del lock ya no existe en el starter | Decidir si se conserva como archivo propio y retirar la entrada |
 | limpio | P = L y S = L | Ninguna |
 | desactualizado | P = L y S ≠ L | Copiar la versión nueva del starter |
+| actualizado-sin-registrar | P = S y S ≠ L | Actualizar la entrada del lock |
 | modificado | P ≠ L y S = L | Mover el cambio a un archivo propio o aceptar la divergencia |
-| conflicto | P ≠ L y S ≠ L | Revisión manual |
-| faltante | El archivo del lock no existe | Restaurarlo o retirarlo del lock |
+| conflicto | P ≠ L, S ≠ L y P ≠ S | Revisión manual |
+| nuevo-en-starter | La composición actual tiene una ruta managed que el lock no lista | Copiarla y añadir su entrada |
+
+Para los seeded solo compara L con S y reporta tres estados: `faltante` (la ruta del lock no existe en el proyecto), `plantilla-sin-cambios` (S = L) y `plantilla-cambió` (S ≠ L). En la v0.1 no se reportan `retirado` ni `nuevo-en-starter` para seeded (ver riesgos en la sección 9).
+
+En total, `starter-diff` tiene **11 estados**: 8 managed y 3 seeded.
 
 **Qué no se guarda:** secretos, rutas absolutas del usuario, correos ni nombres de clientes o empresas. El lock guarda solo rutas relativas.
 
-**Integraciones:** solo `git` local (init y primer commit) y `sha256sum`. El generador imprime el comando `git remote add` con el alias `github-personal` o `github-work`, pero no toca la red.
+**Integraciones:** solo `git` local (init y primer commit), `sha256sum` y coreutils con `sed`. El generador imprime el comando `git remote add` descrito en la sección 5, pero no toca la red.
 
 **Contenido inicial de `.claude/settings.json`** (seeded). El `.gitignore` generado excluye `.claude/settings.local.json`, `CLAUDE.local.md` y los `.env`, que son archivos personales o secretos.
 
 ```json
 {
   "permissions": {
-    "deny": ["Read(**/.env)", "Read(**/.env.local)", "Read(secrets/**)", "Read(~/.ssh/**)"],
+    "deny": ["Read(**/.env)", "Read(**/.env.*)", "Read(secrets/**)", "Read(~/.ssh/**)"],
     "ask": ["Bash(git commit *)", "Bash(git push *)"]
   }
 }
 ```
 
-Según la documentación, una regla `deny` siempre gana y una `ask` pregunta aunque exista un `allow` más específico. Los `deny` de lectura cubren las herramientas integradas y comandos reconocidos como `cat`, pero no un script que abra el archivo por su cuenta, y una regla de Bash no detecta formas como `git -C . push`. Son una red de seguridad, no un límite de seguridad.
+Según la documentación, una regla `deny` siempre gana y una `ask` pregunta aunque exista un `allow` más específico. Los `deny` de lectura cubren las herramientas integradas y comandos reconocidos como `cat`, pero no un script que abra el archivo por su cuenta, y una regla de Bash no detecta formas como `git -C . push`. Son una red de seguridad, no un límite de seguridad. `Read(**/.env.*)` también bloquea `.env.example`; si un proyecto lo necesita, lo permite en su `settings.json`.
 
 ## 7. Plan por hitos
 
@@ -185,7 +275,7 @@ Cinco hitos, de 5 a 6 sesiones de Claude Code en total. El código del Hito 1 no
 
 - Objetivo: stacks componibles y detección de divergencias.
 - Entregables: perfiles `nextjs`, `supabase` y `odoo-addon` (escritos con la documentación vigente de cada uno) y `bin/starter-diff`.
-- Criterio de aceptación: smoke verde en los 4 Tiers y en las combinaciones `nextjs`, `nextjs,supabase` y `odoo-addon`; `starter-diff` reporta correctamente los 5 estados de la sección 6 sobre un proyecto manipulado a propósito.
+- Criterio de aceptación: smoke verde en los 4 Tiers y en las combinaciones `nextjs`, `nextjs,supabase` y `odoo-addon`; sobre un proyecto manipulado a propósito, `starter-diff` reporta cada uno de los 11 estados de la sección 6 al menos una vez y con la clasificación correcta: 8 managed (faltante, retirado, limpio, desactualizado, actualizado-sin-registrar, modificado, conflicto, nuevo-en-starter) y 3 seeded (faltante, plantilla-sin-cambios, plantilla-cambió).
 - Riesgo: los comandos de cada stack cambian. Cada perfil lleva su fecha de verificación.
 
 **Hito 4 · Publicación y primer uso real (0,5 a 1 sesión)**
@@ -210,7 +300,7 @@ Hay dos niveles: pruebas automáticas del generador, que no gastan cuota de Clau
 | Lock | `sha256sum -c` sobre la sección managed pasa justo tras generar (se omite si la sección está vacía, como en Tier 0) |
 | Git | `git log` tiene exactamente un commit |
 | Rechazos | Destino existente, slug inválido, tipo inválido y carpeta padre inexistente terminan con código distinto de 0 y sin escribir |
-| starter-diff | Limpio tras generar; detecta modificado, desactualizado, conflicto y faltante en un proyecto manipulado |
+| starter-diff | Limpio tras generar; detecta cada estado de la sección 6 en un proyecto manipulado |
 
 Comandos: `tests/smoke.sh` y, si está instalado, `shellcheck bin/* lib/*.sh tests/*.sh`. Criterio: salida verde en menos de 30 s.
 
@@ -242,11 +332,14 @@ El riesgo dominante es la deriva: que Claude Code cambie sus formatos o que los 
 | Proyectos que divergen del starter | Separación managed y seeded, y `starter-diff`. Alerta: más de 3 archivos managed modificados en un proyecto |
 | Repo público con datos personales | Búsqueda de secretos y de correo personal antes del tag, y revisión goldfish del árbol |
 | Cuota de suscripción | Los skills de revisión corren solo por invocación explícita |
+| Un `{{` literal en una plantilla seeded (por ejemplo, en un bloque de código) hace fallar la generación, porque cualquier `{{` restante tras el render es error (goldfish Hito 0, C16) | No escribir `{{` en las plantillas; smoke genera todos los Tiers y lo detectaría. Si se necesita, se define un escape en una versión posterior |
+| Los seeded que el starter añade o retira después de generar un proyecto no se reportan: `starter-diff` solo da `retirado` y `nuevo-en-starter` para managed (C12) | Anotarlo en `CHANGELOG.md` cuando cambie la lista de seeded, para revisar a mano los proyectos existentes |
+| `git` falla en el primer commit (`commit.gpgsign` sin agente de firma, identidad ausente porque `includeIf` no aplica) y el generador borra el destino (C20) | El mensaje de error nombra estas dos causas probables y el comando para comprobarlas (`git config --show-origin user.email`) |
 
 **Supuestos** (si alguno es falso, avísame y se corrige):
 
 - Ubuntu 24.04 en WSL2 con bash 5, git y coreutils; la identidad Git cambia sola por carpeta (`includeIf`) y existen los alias `github-personal` y `github-work`.
-- Tu usuario de GitHub personal es `jadriangz`; para `work` el generador imprime un marcador `<ORG>`.
+- Tu usuario de GitHub personal es `jadriangz`; para `work` el generador usa `STARTER_WORK_OWNER` o, si no existe, imprime el marcador `<ORG>`.
 - Licencia MIT.
 - Documentación del starter en español; el idioma del código y los commits de cada proyecto lo define ese proyecto.
 - Hoy no existe una plantilla común (sección 2).
@@ -256,7 +349,12 @@ El riesgo dominante es la deriva: que Claude Code cambie sus formatos o que los 
 - [ ] ¿README en español, inglés o bilingüe? Afecta al portafolio; se decide antes del Hito 4.
 - [ ] ¿Cuál es la ruta de addons de Odoo en el nuevo setup de WSL? La necesita el perfil `odoo-addon` (Hito 3).
 - [ ] ¿Se habilita el sandbox de Claude Code en WSL2? Se evalúa en los Hitos 2 y 3.
-- [ ] ¿Qué organización de GitHub usan los proyectos de `work`? Hasta saberlo el generador imprime un marcador.
+- [ ] ¿Qué organización de GitHub usan los proyectos de `work`? No se escribe en el repo: se da con `STARTER_WORK_OWNER`, y sin ella el generador imprime `<ORG>`.
+- [ ] ¿Cómo se registra en el lock una actualización aceptada (estados actualizado-sin-registrar, retirado y nuevo-en-starter)? ¿Un modo de `starter-diff` o edición manual de las entradas? Se decide en el Hito 3, junto con dos detalles de `starter-diff` que salieron en la revisión goldfish del Hito 0: un perfil retirado del starter debe dar `retirado` y no un error (C10); y `nuevo-en-starter` se evalúa en una pasada aparte, y si la ruta ya existe en el proyecto se reporta como conflicto (C14).
+- [ ] ¿Cuál manda si difieren: los patrones de managed de la sección 6 o la columna "Lock" de la tabla de archivos por capa de la sección 5? Propuesta: los patrones son normativos y la tabla descriptiva; smoke comprueba que coinciden (C13). Se decide en el Hito 1.
+- [ ] ¿Se toleran espacios alrededor de `{{GOBIERNO}}` y `{{COMANDOS_STACK}}` en su línea? Propuesta: no; la línea debe ser exactamente el marcador (C17). Se decide en el Hito 1.
+- [ ] ¿`starter_commit` debe marcarse `-dirty` también por cambios en `lib/` y `bin/`, que alteran la composición, y no solo en `template/`? (C18). Se decide en el Hito 1.
+- [ ] ¿Qué patrones exactos de `.env` lleva el `.gitignore` generado, y se ignora `.env.example`? Hoy el `deny` de `settings.json` sí bloquea `.env.example` (C22). Se decide en el Hito 1, al completar `template/core/dot-gitignore`.
 
 ## 10. Anexos
 
@@ -267,7 +365,7 @@ El riesgo dominante es la deriva: que Claude Code cambie sus formatos o que los 
 Generador de proyectos para Claude Code: crea ~/projects/personal|work/<slug> con docs, reglas, skills y subagente goldfish adaptados al Tier y al stack. Repo público.
 
 ## Comandos
-- Generar: `bin/new-project <slug> --tipo personal|work --tier 0-3 [--stack nextjs,supabase] [--dry-run]`
+- Generar: `bin/new-project <slug> --tipo personal|work --tier 0-3 [--stack nextjs,supabase] [--visibilidad publico|anonimizado|privado] [--dry-run]`
 - Comparar un proyecto con el starter: `bin/starter-diff <ruta-del-proyecto>`
 - Test: `tests/smoke.sh` · Lint: `shellcheck bin/* lib/*.sh tests/*.sh` (si está instalado)
 
