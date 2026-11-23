@@ -2,7 +2,7 @@
 
 Derivado de la sección 7 de [`docs/dossier.md`](dossier.md). Los criterios de aceptación se copian literales; si cambian, cambian primero en el Dossier.
 
-- **Estado global:** Hito 0 cerrado (23 nov 2026). Hito 1 cerrado (23 nov 2026, commit `854f76a`): smoke 53/53, shellcheck limpio y `/memory` verificado a mano. Hito 2 cerrado (23 nov 2026, commit `7bd2fb6`): smoke verde en los 4 Tiers, spike sin Plan B y los skills verificados sobre fixtures. Hito 3 cerrado (23 nov 2026): smoke verde con stacks y los 11 estados de `starter-diff`; pendientes el commit y la prueba manual de carga de reglas.
+- **Estado global:** Hito 0 cerrado (23 nov 2026). Hito 1 cerrado (23 nov 2026, commit `854f76a`): smoke 53/53, shellcheck limpio y `/memory` verificado a mano. Hito 2 cerrado (23 nov 2026, commit `7bd2fb6`): smoke verde en los 4 Tiers, spike sin Plan B y los skills verificados sobre fixtures. Hito 3 cerrado (23 nov 2026, commit `df56317`): smoke verde con stacks y los 11 estados de `starter-diff`; pendiente la prueba manual de carga de reglas.
 - **Regla:** una sesión de Claude Code por hito, en plan mode. El código del Hito 1 no empieza hasta cumplir el criterio del Hito 0.
 - **Cierre de cada hito:** checks verdes, `CLAUDE.md` del starter actualizado y entrada de bitácora.
 
@@ -11,7 +11,7 @@ Derivado de la sección 7 de [`docs/dossier.md`](dossier.md). Los criterios de a
 | 0 | Contrato revisado | 0,5 | Cerrado |
 | 1 | Generador y capas base | 2 | Cerrado |
 | 2 | Subagente y skills | 1,5 | Cerrado |
-| 3 | Perfiles y starter-diff | 1 | Cerrado (pendiente el commit) |
+| 3 | Perfiles y starter-diff | 1 | Cerrado |
 | 4 | Publicación y primer uso real | 0,5 a 1 | Pendiente |
 
 ## Hito 0 · Contrato revisado
@@ -164,7 +164,7 @@ Tareas:
   - objetivo 3 de la sección 3 del Dossier alineado con los 11 estados.
 - [x] CHANGELOG, README y entrada de bitácora en el anexo C del Dossier.
 - [ ] A mano: en un proyecto con `--stack nextjs`, abrir `claude`, leer un archivo de `app/` y confirmar que `stack-nextjs.md` se carga solo entonces.
-- [ ] Commit, cuando se pida.
+- [x] Commit: `df56317` (23 nov 2026).
 
 ## Hito 4 · Publicación y primer uso real
 

@@ -312,7 +312,7 @@ Cinco hitos, de 5 a 6 sesiones de Claude Code en total. El código del Hito 1 no
 - Entregables: perfiles `nextjs`, `supabase` y `odoo-addon` (escritos con la documentación vigente de cada uno) y `bin/starter-diff`.
 - Criterio de aceptación: smoke verde en los 4 Tiers y en las combinaciones `nextjs`, `nextjs,supabase` y `odoo-addon`; sobre un proyecto manipulado a propósito, `starter-diff` reporta cada uno de los 11 estados de la sección 6 al menos una vez y con la clasificación correcta: 8 managed (faltante, retirado, limpio, desactualizado, actualizado-sin-registrar, modificado, conflicto, nuevo-en-starter) y 3 seeded (faltante, plantilla-sin-cambios, plantilla-cambió).
 - Riesgo: los comandos de cada stack cambian. Cada perfil lleva su fecha de verificación.
-- Estado: Cerrado (23 nov 2026), pendiente el commit.
+- Estado: Cerrado (23 nov 2026, commit `df56317`).
 
 **Hito 4 · Publicación y primer uso real (0,5 a 1 sesión)**
 
@@ -471,7 +471,7 @@ Cada proyecto nuevo con Claude Code obligaba a rehacer la misma estructura de co
 - Lock en texto plano con hashes, para detectar divergencias sin jq ni Python.
 
 ## Solución
-Hito 1 (23 nov 2026): `bin/new-project` genera proyectos Tier 0 y 1 desde las capas `core` y `t1`, valida todo antes de escribir, construye en un temporal, mueve con `mv -T` y hace el primer commit; deja `.claude/starter.lock` con la versión, el commit del starter y los hashes. Hito 2 (23 nov 2026, commit `7bd2fb6`): subagente `goldfish-revisor` de solo lectura y sin `CLAUDE.md`; skills `/hito`, `/revisar-diff`, `/cierre-hito`, `/bitacora` y `/revisar-diseno`; capas `t2` (PRD y ADR) y `t3` (CHANGELOG y gobierno). Hito 3 (23 nov 2026): perfiles `nextjs` (Next.js 16), `supabase` (CLI v3) y `odoo-addon` (Odoo 19.0 y 20.0), cada uno con una regla que Claude carga solo al tocar archivos del stack y sus comandos en `CLAUDE.md`; y `bin/starter-diff`, que compara un proyecto con el starter actual en 11 estados, sin escribir nada, e imprime la línea del lock que hay que editar.
+Hito 1 (23 nov 2026): `bin/new-project` genera proyectos Tier 0 y 1 desde las capas `core` y `t1`, valida todo antes de escribir, construye en un temporal, mueve con `mv -T` y hace el primer commit; deja `.claude/starter.lock` con la versión, el commit del starter y los hashes. Hito 2 (23 nov 2026, commit `7bd2fb6`): subagente `goldfish-revisor` de solo lectura y sin `CLAUDE.md`; skills `/hito`, `/revisar-diff`, `/cierre-hito`, `/bitacora` y `/revisar-diseno`; capas `t2` (PRD y ADR) y `t3` (CHANGELOG y gobierno). Hito 3 (23 nov 2026, commit `df56317`): perfiles `nextjs` (Next.js 16), `supabase` (CLI v3) y `odoo-addon` (Odoo 19.0 y 20.0), cada uno con una regla que Claude carga solo al tocar archivos del stack y sus comandos en `CLAUDE.md`; y `bin/starter-diff`, que compara un proyecto con el starter actual en 11 estados, sin escribir nada, e imprime la línea del lock que hay que editar.
 
 ## Cómo se usó Claude Code
 Planeación en el Estudio de Proyectos (clasificación por Tier y Dossier). Construcción con E/G ligero: revisión goldfish del contrato y del diff de cada hito. La del diff del Hito 1 se hizo a mano (0 altos, 2 medios, 8 bajos), antes de tener `/revisar-diff`. En el Hito 2, un spike con canarios comprobó el aislamiento antes de escribir los skills:
