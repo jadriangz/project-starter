@@ -4,7 +4,13 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y 
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-23
+
+Primera versión pública.
+
 ### Añadido
+- README completo: quickstart, requisito de identidad de git por ruta (`includeIf`), prueba con un `PROJECTS_ROOT` temporal, Tiers, método E/G, `STARTER_WORK_OWNER` y límites conocidos. Resumen breve en inglés.
+- `LICENSE` (MIT).
 - `bin/new-project`: genera un proyecto de Tier 0 a 3 en `$PROJECTS_ROOT/<tipo>/<slug>`, valida todo antes de escribir, construye en un temporal, mueve con `mv -T` y crea el primer commit.
 - `lib/common.sh`: validación, composición de capas (`dot-` → `.`, sin `.tmpl`), render de fragmentos y placeholders, y escritura del lock.
 - Capas `template/core` y `template/t1`.
@@ -32,3 +38,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y 
 - Spike del Hito 2: `context: fork`, `agent`, `omitClaudeMd` y la inyección con `!` funcionan en Claude Code 2.1.330; no se aplicó el Plan B.
 - Hito 3: las actualizaciones aceptadas se registran a mano en el lock; un perfil retirado da `retirado` con aviso (C10); una ruta managed nueva que ya existe en el proyecto da `actualizado-sin-registrar` o `conflicto` (C14); el perfil `odoo-addon` usa `ODOO_BIN` y `ODOO_ADDONS_PATH` y no guarda rutas.
 - Verificado: el `deny` de `.env*` impide a Claude leer, editar y crear `.env.example`; `settings.json` no cambia. Decidido: se mantiene así.
+- Hito 4: README en español con resumen en inglés; licencia MIT; la organización de `work` solo por `STARTER_WORK_OWNER`; el sandbox de Claude Code en WSL2 se evalúa en la v0.2. La landing del portafolio sale del criterio de la v0.1 y la sustituye la validación del README de punta a punta en un clon temporal.
+
+[Unreleased]: https://github.com/jadriangz/project-starter/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/jadriangz/project-starter/releases/tag/v0.1.0

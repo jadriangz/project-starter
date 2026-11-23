@@ -2,7 +2,7 @@
 
 Derivado de la sección 7 de [`docs/dossier.md`](dossier.md). Los criterios de aceptación se copian literales; si cambian, cambian primero en el Dossier.
 
-- **Estado global:** Hito 0 cerrado (23 nov 2026). Hito 1 cerrado (23 nov 2026, commit `854f76a`): smoke 53/53, shellcheck limpio y `/memory` verificado a mano. Hito 2 cerrado (23 nov 2026, commit `7bd2fb6`): smoke verde en los 4 Tiers, spike sin Plan B y los skills verificados sobre fixtures. Hito 3 cerrado (23 nov 2026, commit `df56317`): smoke verde con stacks y los 11 estados de `starter-diff`; pendiente la prueba manual de carga de reglas.
+- **Estado global:** Hito 0 cerrado (23 nov 2026). Hito 1 cerrado (23 nov 2026, commit `854f76a`): smoke 53/53, shellcheck limpio y `/memory` verificado a mano. Hito 2 cerrado (23 nov 2026, commit `7bd2fb6`): smoke verde en los 4 Tiers, spike sin Plan B y los skills verificados sobre fixtures. Hito 3 cerrado (23 nov 2026, commit `df56317`): smoke verde con stacks y los 11 estados de `starter-diff`; la prueba manual de carga de reglas del perfil `nextjs` pasó. Hito 4 en curso (23 nov 2026).
 - **Regla:** una sesión de Claude Code por hito, en plan mode. El código del Hito 1 no empieza hasta cumplir el criterio del Hito 0.
 - **Cierre de cada hito:** checks verdes, `CLAUDE.md` del starter actualizado y entrada de bitácora.
 
@@ -163,21 +163,43 @@ Tareas:
   - smoke cubre ruta absoluta, nota C12, `retirado` de una capa y las líneas `lock:` de desactualizado y nuevo-en-starter;
   - objetivo 3 de la sección 3 del Dossier alineado con los 11 estados.
 - [x] CHANGELOG, README y entrada de bitácora en el anexo C del Dossier.
-- [ ] A mano: en un proyecto con `--stack nextjs`, abrir `claude`, leer un archivo de `app/` y confirmar que `stack-nextjs.md` se carga solo entonces.
+- [x] A mano: en un proyecto con `--stack nextjs`, abrir `claude`, leer un archivo de `app/` y confirmar que `stack-nextjs.md` se carga solo entonces. Hecho por Adrián: pasó.
 - [x] Commit: `df56317` (23 nov 2026).
 
 ## Hito 4 · Publicación y primer uso real
 
 - **Objetivo:** repo público y probado con un proyecto real.
-- **Entregables:** README (qué es, Tiers, uso, razón de E/G), CHANGELOG, LICENSE, tag `v0.1.0`, entrada de bitácora del propio starter y la landing del portafolio creada con `new-project`.
-- **Criterio de aceptación:** clon limpio en un directorio temporal y quickstart del README en 3 comandos o menos; búsqueda de secretos y datos personales sin hallazgos; un goldfish con solo el README y el árbol del repo explica qué hace el starter; la landing se genera sin editar la estructura a mano.
+- **Entregables:** README (qué es, Tiers, uso, razón de E/G), CHANGELOG, LICENSE, tag `v0.1.0` y entrada de bitácora del propio starter.
+- **Criterio de aceptación:** clon limpio en un directorio temporal y quickstart del README en 3 comandos o menos; búsqueda de secretos y datos personales en todo el historial de git sin hallazgos; un goldfish con solo el README y el árbol del repo explica qué hace el starter; el README se valida de punta a punta, siguiendo solo sus instrucciones en el clon temporal (clonar, `new-project` y comprobar el resultado).
 - **Riesgo:** un README que solo entiende su autor. Lo cubre la revisión goldfish.
 
+Decisiones del inicio del Hito 4 (registradas en las secciones 3, 7 y 9 del Dossier):
+- **Cambio de criterio:** sale "la landing se genera sin editar la estructura a mano" y entra la validación del README de punta a punta. Razón: la landing merece su propio Dossier y su clasificación en el Estudio; meterla aquí mezclaría dos proyectos y dejaría el cierre de la v0.1 sujeto a otro.
+- **Idioma del README:** español, con un resumen breve en inglés al inicio.
+- **Sandbox en WSL2:** no entra en la v0.1; se evalúa en la v0.2. El README documenta el límite de los `deny`.
+- **Organización de GitHub para `work`:** solo `STARTER_WORK_OWNER`; el repo no guarda el nombre.
+- **Licencia:** MIT, confirmada.
+- **Publicación:** hacer público el repo, subir el tag o cambiar ajustes de GitHub exige confirmación explícita de Adrián.
+
 Tareas:
-- [ ] Decidir idioma del README.
-- [ ] README completo, LICENSE (MIT) y CHANGELOG.
-- [ ] El README documenta como requisito previo la identidad de git por ruta: reglas `includeIf` para `~/projects/personal` y `~/projects/work`; sin ellas el primer commit de `new-project` falla y el destino se borra.
-- [ ] Búsqueda de secretos y datos personales.
-- [ ] Revisión goldfish del README y el árbol.
-- [ ] Generar la landing del portafolio y registrar lo que falte como issue.
-- [ ] Tag `v0.1.0`.
+- [x] Decidir idioma del README, sandbox, organización de `work` y licencia.
+- [x] Búsqueda de secretos y datos personales en todo el historial (`gitleaks git --log-opts=--all` y grep de rutas y correos sobre `git log -p --all`): sin hallazgos.
+- [x] README completo, LICENSE (MIT) y CHANGELOG con `[0.1.0]`. Smoke verde (5 s), shellcheck limpio y gitleaks sin hallazgos en árbol e historial.
+- [x] El README documenta como requisito previo la identidad de git por ruta: reglas `includeIf` para `~/projects/personal` y `~/projects/work`; sin ellas el primer commit de `new-project` falla y el destino se borra.
+- [x] Validar el README de punta a punta en un clon temporal:
+  - quickstart literal con `HOME` temporal y el `includeIf` del README, en 3 comandos: 1 commit, árbol limpio y lock presente;
+  - "Probar sin tocar tus carpetas", también literal;
+  - `starter-diff` en ambos casos: 5 `limpio` y 8 `plantilla-sin-cambios`.
+
+  Hallazgo corregido: el bloque de prueba anterior fallaba sin identidad global; ahora usa `GIT_CONFIG_GLOBAL`.
+- [x] Revisión goldfish del README y el árbol, con un subagente que solo vio esos dos: explicó bien el starter y dio "con reservas", con 0 altos, 5 medios y 7 bajos, todos aplicados:
+  - git 2.32 para las pruebas;
+  - commit en el destino final;
+  - criterio orientativo de Tier;
+  - tabla de estados de `starter-diff`;
+  - E/G ligado a `metodologia=eg-ligero`;
+  - slug, visibilidad, remoto `personal`, `unset PROJECTS_ROOT` y variables de Odoo.
+- [x] Entrada de bitácora en el anexo C del Dossier.
+- [ ] Tag `v0.1.0` (local, tras el commit; subirlo y hacer público el repo, con confirmación).
+
+**Siguiente paso, fuera del Hito 4:** la landing del portafolio, como proyecto propio en el Estudio (Dossier y Tier propios), generada después con `bin/new-project`.
