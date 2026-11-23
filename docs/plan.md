@@ -2,7 +2,7 @@
 
 Derivado de la sección 7 de [`docs/dossier.md`](dossier.md). Los criterios de aceptación se copian literales; si cambian, cambian primero en el Dossier.
 
-- **Estado global:** Hito 0 cerrado (23 nov 2026). Hito 1 cerrado (23 nov 2026, commit `854f76a`): smoke 53/53, shellcheck limpio y `/memory` verificado a mano. Hito 2 cerrado (23 nov 2026): smoke verde en los 4 Tiers, spike sin Plan B y los skills verificados sobre fixtures; pendiente el commit.
+- **Estado global:** Hito 0 cerrado (23 nov 2026). Hito 1 cerrado (23 nov 2026, commit `854f76a`): smoke 53/53, shellcheck limpio y `/memory` verificado a mano. Hito 2 cerrado (23 nov 2026, commit `7bd2fb6`): smoke verde en los 4 Tiers, spike sin Plan B y los skills verificados sobre fixtures. Hito 3 cerrado (23 nov 2026): smoke verde con stacks y los 11 estados de `starter-diff`; pendientes el commit y la prueba manual de carga de reglas.
 - **Regla:** una sesión de Claude Code por hito, en plan mode. El código del Hito 1 no empieza hasta cumplir el criterio del Hito 0.
 - **Cierre de cada hito:** checks verdes, `CLAUDE.md` del starter actualizado y entrada de bitácora.
 
@@ -11,7 +11,7 @@ Derivado de la sección 7 de [`docs/dossier.md`](dossier.md). Los criterios de a
 | 0 | Contrato revisado | 0,5 | Cerrado |
 | 1 | Generador y capas base | 2 | Cerrado |
 | 2 | Subagente y skills | 1,5 | Cerrado |
-| 3 | Perfiles y starter-diff | 1 | Pendiente |
+| 3 | Perfiles y starter-diff | 1 | Cerrado (pendiente el commit) |
 | 4 | Publicación y primer uso real | 0,5 a 1 | Pendiente |
 
 ## Hito 0 · Contrato revisado
@@ -132,7 +132,7 @@ Tareas:
   - `allowed-tools`: la prueba mostró que `Bash(sed -n *)` preaprueba `sed -n -i`. Los skills leen con Grep y Read, y los comandos `!` usan reglas exactas; smoke prohíbe `*` en `allowed-tools`.
   - `.env.example`: se mantiene el `deny` (pregunta de la sección 9 cerrada) y el `CLAUDE.md` generado lleva la convención de indicar la línea exacta de cada variable nueva.
   - Fixtures revisados: sin cadenas con forma de secreto.
-- [ ] Commit, cuando se pida.
+- [x] Commit: `7bd2fb6` (23 nov 2026).
 
 ## Hito 3 · Perfiles y starter-diff
 
@@ -141,11 +141,30 @@ Tareas:
 - **Criterio de aceptación:** smoke verde en los 4 Tiers y en las combinaciones `nextjs`, `nextjs,supabase` y `odoo-addon`; sobre un proyecto manipulado a propósito, `starter-diff` reporta cada uno de los 11 estados de la sección 6 al menos una vez y con la clasificación correcta: 8 managed (faltante, retirado, limpio, desactualizado, actualizado-sin-registrar, modificado, conflicto, nuevo-en-starter) y 3 seeded (faltante, plantilla-sin-cambios, plantilla-cambió).
 - **Riesgo:** los comandos de cada stack cambian. Cada perfil lleva su fecha de verificación.
 
+Decisiones del inicio del Hito 3 (registradas en las secciones 6 y 9 del Dossier):
+- **Aceptación de actualizaciones:** manual; `starter-diff` es de solo lectura e imprime la línea exacta del lock.
+- **C10:** perfil del lock que ya no existe → aviso en stderr y sus managed como `retirado`.
+- **C14:** segunda pasada para `nuevo-en-starter`; si la ruta ya existe en el proyecto, P = S → `actualizado-sin-registrar` y P ≠ S → `conflicto`.
+- **Odoo:** el proyecto es el directorio de addons; comandos con `$ODOO_BIN` y `--addons-path="$ODOO_ADDONS_PATH,."`; perfil agnóstico, verificado en 19.0 y 20.0.
+- **Sandbox:** fuera de este hito; queda abierta sin hito.
+- `VERSION` sigue en `0.1.0`: no cambia el formato del lock ni los nombres de capas o skills.
+
 Tareas:
-- [ ] Perfiles con regla `stack-<perfil>.md` y fragmento de comandos.
-- [ ] `bin/starter-diff` con los estados de la sección 6.
-- [ ] Decidir cómo se acepta una actualización en el lock, junto con C10 y C14 (preguntas abiertas de la sección 9).
-- [ ] Smoke con combinaciones de stack y proyecto manipulado.
+- [x] Perfiles `nextjs`, `supabase` y `odoo-addon`: regla `stack-<perfil>.md` con `paths:` y fragmento de comandos, cada viñeta verificada en la documentación vigente (fuentes en la sección 5 del Dossier). Quedó fuera lo que no se pudo leer textual: los scripts de `create-next-app` y el retiro de `attrs` en Odoo. Hallazgo: Odoo 20 usa `security/ir.access.csv` y 19 `ir.model.access.csv`; la regla nombra ambos.
+- [x] `lib/common.sh`: un perfil solo puede aportar su regla y `_fragmentos/comandos.md`; `leer_lock` para `starter-diff`.
+- [x] `bin/starter-diff` con los 11 estados de la sección 6, C10, C14 y la línea de lock sugerida.
+- [x] Decidir cómo se acepta una actualización en el lock, junto con C10 y C14 (preguntas abiertas de la sección 9).
+- [x] Smoke con combinaciones de stack (`nextjs`, `nextjs,supabase`, `odoo-addon` y stack en Tier 0) y fixture manipulado que provoca los 11 estados: 178 checks en verde en 6 s, shellcheck limpio. Dos mutaciones deliberadas (escribir en el proyecto y seguir enlaces) hacen fallar el smoke.
+- [x] Revisión goldfish del diff con un subagente de contexto limpio: cumple con reservas, 0 altos, 2 medios y 6 bajos, todos aplicados:
+  - la prueba de solo lectura compara contenido, no solo nombres y `git status`;
+  - `starter-diff` no sigue enlaces simbólicos: un enlace o un directorio en una ruta managed da `conflicto`, y un `.claude` enlazado fuera del proyecto es error;
+  - `leer_lock` rechaza un `stack` sin normalizar, rutas con `//` o `/` final y entradas en la sección equivocada;
+  - un perfil no puede llevar otros archivos en `_fragmentos/`;
+  - smoke cubre ruta absoluta, nota C12, `retirado` de una capa y las líneas `lock:` de desactualizado y nuevo-en-starter;
+  - objetivo 3 de la sección 3 del Dossier alineado con los 11 estados.
+- [x] CHANGELOG, README y entrada de bitácora en el anexo C del Dossier.
+- [ ] A mano: en un proyecto con `--stack nextjs`, abrir `claude`, leer un archivo de `app/` y confirmar que `stack-nextjs.md` se carga solo entonces.
+- [ ] Commit, cuando se pida.
 
 ## Hito 4 · Publicación y primer uso real
 

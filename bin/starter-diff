@@ -1,0 +1,156 @@
+#!/usr/bin/env bash
+# Compara un proyecto generado con el starter actual. Solo lectura: no escribe
+# nada; para cada estado que toca el lock imprime la línea que hay que editar.
+# Contrato: docs/dossier.md, sección 6 (starter-diff, 11 estados, C10 y C14).
+set -euo pipefail
+
+STARTER_ROOT=$(cd -P "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=lib/common.sh
+. "$STARTER_ROOT/lib/common.sh"
+
+uso() {
+	cat <<'EOF'
+Uso: starter-diff <ruta-del-proyecto>
+
+Lee <ruta>/.claude/starter.lock, recompone el starter actual con el tier y el
+stack del lock y reporta el estado de cada archivo (managed y seeded).
+Sale con 0 si completó el reporte, haya o no divergencias; con 1 ante un error.
+EOF
+}
+
+case ${1:-} in
+-h | --help)
+	uso
+	exit 0
+	;;
+'') die "falta la ruta del proyecto (ver --help)" ;;
+-*) die "opción desconocida: $1 (ver --help)" ;;
+esac
+(($# == 1)) || die "argumento sobrante: $2 (solo se admite una ruta)"
+[[ -d $1 ]] || die "no existe el proyecto $1"
+P=$(cd -P "$1" && pwd)
+
+# tipo_ruta <ruta>: ausente, archivo (regular y dentro del proyecto, sin enlaces
+# simbólicos en el camino) u otro (directorio o enlace). Así no se lee fuera de P.
+tipo_ruta() {
+	if [[ ! -e $P/$1 && ! -L $P/$1 ]]; then
+		echo ausente
+	elif [[ -f $P/$1 && $(realpath -e -- "$P/$1") == "$P/$1" ]]; then
+		echo archivo
+	else
+		echo otro
+	fi
+}
+
+[[ $(tipo_ruta .claude/starter.lock) != otro ]] || die "el lock no es un archivo regular dentro del proyecto (¿enlace simbólico?)"
+leer_lock "$P/.claude/starter.lock"
+
+# --- S: el starter actual con el tier y el stack del lock ----------------------
+# C10: un perfil que ya no existe se omite con aviso; sus managed salen como retirado.
+PERFILES=()
+if [[ -n ${LOCK[stack]} ]]; then
+	IFS=, read -r -a perfiles_lock <<<"${LOCK[stack]}"
+	for p in "${perfiles_lock[@]}"; do
+		[[ $p =~ $RE_SLUG ]] || die "perfil inválido '$p' en el stack del lock"
+		if [[ -d $STARTER_ROOT/template/profiles/$p ]]; then
+			PERFILES+=("$p")
+		else
+			log "aviso: el perfil '$p' del lock ya no existe en el starter; sus archivos salen como retirado (C10)"
+		fi
+	done
+fi
+capas_para_tier "${LOCK[tier]}"
+componer
+
+sha_s() { _sha "$STARTER_ROOT/template/${FUENTE[$1]}"; }
+sha_p() { _sha "$P/$1"; }
+
+# reportar <clase> <estado> <ruta> [acción] [línea de lock]
+# Cada ruta aparece una sola vez por clase; la salida se ordena por clase y ruta.
+declare -A SALIDA=() CONTEO=()
+reportar() {
+	local bloque
+	bloque="$1  $2  $3"
+	if [[ -n ${4:-} ]]; then bloque+=$'\n'"  → $4"; fi
+	if [[ -n ${5:-} ]]; then bloque+=$'\n'"  lock: $5"; fi
+	SALIDA["$1 $3"]=$bloque
+	CONTEO[$1 $2]=$((${CONTEO[$1 $2]:-0} + 1))
+}
+
+# --- Managed, primera pasada: rutas del lock (orden de §6, gana el primero) ---
+mapfile -t rutas_m < <(printf '%s\n' "${!LOCK_M[@]}" | LC_ALL=C sort)
+for r in "${rutas_m[@]}"; do
+	[[ -n $r ]] || continue
+	l=${LOCK_M[$r]} tipo=$(tipo_ruta "$r")
+	if [[ $tipo == ausente ]]; then
+		reportar managed faltante "$r" "restaurarla o retirar su entrada del lock"
+		continue
+	fi
+	if [[ -z ${FUENTE[$r]:-} ]]; then
+		reportar managed retirado "$r" "decidir si se conserva como archivo propio y retirar la entrada" "quitar la línea de $r"
+		continue
+	fi
+	if [[ $tipo == otro ]]; then
+		reportar managed conflicto "$r" "no es un archivo regular dentro del proyecto (directorio o enlace simbólico): revisión manual"
+		continue
+	fi
+	pp=$(sha_p "$r") s=$(sha_s "$r")
+	if [[ $pp == "$l" && $s == "$l" ]]; then
+		reportar managed limpio "$r"
+	elif [[ $pp == "$l" ]]; then
+		reportar managed desactualizado "$r" "copiar la versión nueva desde template/${FUENTE[$r]}" "$s  $r"
+	elif [[ $pp == "$s" ]]; then
+		reportar managed actualizado-sin-registrar "$r" "actualizar la entrada del lock" "$s  $r"
+	elif [[ $s == "$l" ]]; then
+		reportar managed modificado "$r" "mover el cambio a un archivo propio o aceptar la divergencia"
+	else
+		reportar managed conflicto "$r" "revisión manual frente a template/${FUENTE[$r]}"
+	fi
+done
+
+# --- Managed, segunda pasada: rutas nuevas del starter (C14) -------------------
+for r in "${RUTAS[@]}"; do
+	if ! es_managed "$r" || [[ -n ${LOCK_M[$r]:-} ]]; then continue; fi
+	s=$(sha_s "$r") tipo=$(tipo_ruta "$r")
+	if [[ $tipo == ausente ]]; then
+		reportar managed nuevo-en-starter "$r" "copiarla desde template/${FUENTE[$r]} y añadir su entrada en --managed--" "$s  $r"
+	elif [[ $tipo == archivo && $(sha_p "$r") == "$s" ]]; then
+		reportar managed actualizado-sin-registrar "$r" "añadir su entrada en --managed--" "$s  $r"
+	else
+		reportar managed conflicto "$r" "el proyecto ya tiene esta ruta y difiere de template/${FUENTE[$r]}: revisión manual"
+	fi
+done
+
+# --- Seeded: solo L frente a S --------------------------------------------------
+mapfile -t rutas_s < <(printf '%s\n' "${!LOCK_S[@]}" | LC_ALL=C sort)
+for r in "${rutas_s[@]}"; do
+	[[ -n $r ]] || continue
+	if [[ $(tipo_ruta "$r") == ausente ]]; then
+		reportar seeded faltante "$r" "restaurarla o retirar su entrada del lock"
+	elif [[ -z ${FUENTE[$r]:-} ]]; then
+		reportar seeded plantilla-cambió "$r" "ya no está en el starter: revisar a mano y retirar la entrada" "quitar la línea de $r"
+	elif [[ $(sha_s "$r") == "${LOCK_S[$r]}" ]]; then
+		reportar seeded plantilla-sin-cambios "$r"
+	else
+		reportar seeded plantilla-cambió "$r" "revisar template/${FUENTE[$r]} y traer a mano lo que sirva" "$(sha_s "$r")  $r"
+	fi
+done
+
+# --- Salida -----------------------------------------------------------------------
+starter_commit
+printf '# starter-diff de %s\n' "$P"
+printf '# lock: v%s (%s) · starter actual: v%s (%s) · tier %s · stack %s\n' \
+	"${LOCK[starter_version]}" "${LOCK[starter_commit]:-sin commit}" \
+	"$(<"$STARTER_ROOT/VERSION")" "${STARTER_COMMIT:-sin commit}" \
+	"${LOCK[tier]}" "${LOCK[stack]:-(ninguno)}"
+if ((${#SALIDA[@]})); then
+	mapfile -t claves < <(printf '%s\n' "${!SALIDA[@]}" | LC_ALL=C sort) # managed < seeded
+	for k in "${claves[@]}"; do printf '%s\n' "${SALIDA[$k]}"; done
+fi
+resumen=()
+mapfile -t estados < <(printf '%s\n' "${!CONTEO[@]}" | LC_ALL=C sort)
+for e in "${estados[@]}"; do if [[ -n $e ]]; then resumen+=("${e// /\/}=${CONTEO[$e]}"); fi; done
+printf '# resumen: %s\n' "$(
+	IFS=' '
+	printf '%s' "${resumen[*]}"
+)"

@@ -146,6 +146,8 @@ componer() {
 	for p in "${PERFILES[@]}"; do
 		dir=$t/profiles/$p
 		_componer_dir "$dir" "profiles/$p" perfil
+		f=$(find "$dir/_fragmentos" -mindepth 1 ! -path "$dir/_fragmentos/comandos.md" -print -quit 2>/dev/null || true)
+		[[ -z $f ]] || die "template/profiles/$p/${f#"$dir"/}: un perfil solo aporta _fragmentos/comandos.md como fragmento"
 		if [[ -f $dir/_fragmentos/comandos.md ]]; then FRAG_COMANDOS+=("$dir/_fragmentos/comandos.md"); fi
 	done
 
@@ -167,9 +169,13 @@ _componer_dir() {
 		[[ -n ${vistas[$RUTA_DESTINO]:-} ]] &&
 			die "colisión dentro de template/$prefijo: ${vistas[$RUTA_DESTINO]} y $rel dan $RUTA_DESTINO"
 		vistas[$RUTA_DESTINO]=$rel
-		# Los perfiles se componen después de las capas: esto cubre perfil-capa y perfil-perfil.
-		if [[ $clase == perfil && -n ${FUENTE[$RUTA_DESTINO]:-} ]]; then
-			die "colisión: template/$prefijo/$rel y template/${FUENTE[$RUTA_DESTINO]} dan $RUTA_DESTINO"
+		if [[ $clase == perfil ]]; then
+			# Un perfil solo aporta su regla (y su fragmento, que no se copia).
+			[[ $RUTA_DESTINO == ".claude/rules/stack-${prefijo#profiles/}.md" ]] ||
+				die "template/$prefijo/$rel: un perfil solo aporta .claude/rules/stack-${prefijo#profiles/}.md y _fragmentos/comandos.md"
+			# Los perfiles se componen después de las capas: esto cubre perfil-capa y perfil-perfil.
+			[[ -z ${FUENTE[$RUTA_DESTINO]:-} ]] ||
+				die "colisión: template/$prefijo/$rel y template/${FUENTE[$RUTA_DESTINO]} dan $RUTA_DESTINO"
 		fi
 		FUENTE[$RUTA_DESTINO]=$prefijo/$rel
 	done < <(find "$dir" -path "$dir/_fragmentos" -prune -o -type f -print0)
@@ -239,6 +245,67 @@ _sha() {
 	local h _
 	read -r h _ < <(sha256sum <"$1")
 	printf '%s' "$h"
+}
+
+# leer_lock <archivo>: valida la gramática de §6 con schema=1. Deja la cabecera
+# en LOCK[clave] y las entradas en LOCK_M[ruta] y LOCK_S[ruta] (ruta → sha256).
+# Una ruta absoluta, con '..', espacios o barras invertidas es error: starter-diff
+# no debe leer fuera del proyecto.
+readonly CLAVES_LOCK='schema starter_version starter_commit slug tipo tier metodologia stack visibilidad generated_at'
+leer_lock() {
+	local f=$1 linea n=0 seccion=cabecera clave ruta
+	local -a esperadas
+	read -r -a esperadas <<<"$CLAVES_LOCK"
+	declare -gA LOCK=() LOCK_M=() LOCK_S=()
+	[[ -f $f ]] || die "no existe el lock $f"
+	while IFS= read -r linea || [[ -n $linea ]]; do
+		n=$((n + 1))
+		if ((n == 1)); then
+			[[ $linea == "$LOCK_COMENTARIO" ]] || die "lock $f:1: falta el comentario inicial"
+			continue
+		fi
+		case $seccion in
+		cabecera)
+			if [[ $linea == '#'* && ${#LOCK[@]} -eq 0 ]]; then continue; fi
+			if [[ $linea == --managed-- ]]; then
+				((${#LOCK[@]} == ${#esperadas[@]})) || die "lock $f:$n: faltan claves de cabecera antes de --managed--"
+				seccion=managed
+				continue
+			fi
+			clave=${esperadas[${#LOCK[@]}]:-}
+			[[ -n $clave && $linea == "$clave="* ]] || die "lock $f:$n: se esperaba '${clave:---managed--}=…' y hay '$linea'"
+			LOCK[$clave]=${linea#*=}
+			;;
+		managed | seeded)
+			if [[ $seccion == managed && $linea == --seeded-- ]]; then
+				seccion=seeded
+				continue
+			fi
+			[[ $linea =~ ^([0-9a-f]{64})\ \ ([^[:space:]\\]+)$ ]] || die "lock $f:$n: entrada inválida '$linea'"
+			ruta=${BASH_REMATCH[2]}
+			[[ $ruta != /* && $ruta != */ && $ruta != *//* && /$ruta/ != */../* && /$ruta/ != */./* ]] ||
+				die "lock $f:$n: ruta no permitida '$ruta'"
+			[[ -z ${LOCK_M[$ruta]:-} && -z ${LOCK_S[$ruta]:-} ]] || die "lock $f:$n: ruta repetida '$ruta'"
+			if es_managed "$ruta"; then
+				[[ $seccion == managed ]] || die "lock $f:$n: '$ruta' es managed y está en --seeded--"
+			else
+				[[ $seccion == seeded ]] || die "lock $f:$n: '$ruta' es seeded y está en --managed--"
+			fi
+			if [[ $seccion == managed ]]; then LOCK_M[$ruta]=${BASH_REMATCH[1]}; else LOCK_S[$ruta]=${BASH_REMATCH[1]}; fi
+			;;
+		esac
+	done <"$f"
+	[[ $seccion == seeded ]] || die "lock $f: faltan los marcadores --managed-- y --seeded--"
+	[[ ${LOCK[schema]} == 1 ]] || die "lock $f: schema '${LOCK[schema]}' no soportado (solo 1)"
+	# stack: perfiles con la regex del slug, ordenados con LC_ALL=C y sin duplicados.
+	local re_stack="^(${RE_SLUG:1:-1})(,(${RE_SLUG:1:-1}))*$"
+	if [[ -n ${LOCK[stack]} ]]; then
+		[[ ${LOCK[stack]} =~ $re_stack &&
+			$(tr , '\n' <<<"${LOCK[stack]}" | LC_ALL=C sort -u | paste -sd,) == "${LOCK[stack]}" ]] ||
+			die "lock $f: stack '${LOCK[stack]}' no está normalizado (perfiles ordenados, sin duplicados ni vacíos)"
+	fi
+	validar_tier "${LOCK[tier]}"
+	validar_tipo "${LOCK[tipo]}"
 }
 
 # escribir_lock <archivo>. Requiere las variables de cabecera, RUTAS y FUENTE.

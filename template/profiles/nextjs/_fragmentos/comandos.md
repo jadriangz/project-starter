@@ -1,0 +1,1 @@
+- Next.js 16 (Node 20.9 o superior): `npm run dev` · `npm run build` · `npm run start` · lint con el script del linter de `package.json` (`next lint` ya no existe) · tipos de rutas: `npx next typegen`.

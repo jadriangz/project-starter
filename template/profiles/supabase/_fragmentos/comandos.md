@@ -1,0 +1,1 @@
+- Supabase CLI v3 (local por defecto; `--remote` para el proyecto alojado): `supabase start` · `supabase migration new <nombre>` · `supabase db reset` · `supabase test db` · tipos: `npx supabase gen types typescript > database.types.ts`.

@@ -1,0 +1,2 @@
+- Odoo: este repo es un directorio de addons (un módulo por carpeta). `ODOO_BIN` y `ODOO_ADDONS_PATH` los define la persona en su entorno; si faltan, pídelos.
+- Actualizar: `"$ODOO_BIN" --addons-path="$ODOO_ADDONS_PATH,." -d <bd> -u <modulo> --stop-after-init` · tests: igual, con `--test-tags /<modulo>` · nuevo módulo: `"$ODOO_BIN" scaffold <modulo> .`

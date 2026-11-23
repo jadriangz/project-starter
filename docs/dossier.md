@@ -29,7 +29,7 @@ La v0.1 se da por lograda cuando se cumplen estos seis resultados medibles.
 
 1. `new-project` genera un proyecto válido en cada Tier (0 a 3) en menos de 5 s y sin red.
 2. `tests/smoke.sh` pasa en WSL2 Ubuntu 24.04 con los 4 Tiers y al menos 3 combinaciones de stack.
-3. `starter-diff` distingue tres estados por archivo: limpio, modificado en el proyecto y desactualizado frente al starter.
+3. `starter-diff` distingue por archivo los 11 estados de la sección 6, entre ellos limpio, modificado en el proyecto y desactualizado frente al starter.
 4. `/revisar-diseno` y `/revisar-diff` devuelven hallazgos sobre fixtures con defectos conocidos y no modifican ningún archivo.
 5. La landing del portafolio se crea con el starter sin editar su estructura a mano; lo que falte se registra como issue del starter.
 6. Repo público con tag `v0.1.0`, README, CHANGELOG, LICENSE y sin secretos ni datos personales.
@@ -184,6 +184,13 @@ Los errores van a stderr y terminan con código distinto de 0. Las opciones se e
 - **Prueba empírica de `allowed-tools`** (detalle en `docs/verificacion.md`). Con `Bash(sed -n *) Bash(git diff *)` en un skill, Claude ejecutó sin preguntar `sed -n -i '1p' a.txt`, que truncó el archivo, y `git diff --no-index --output=salida.txt …`, que creó un archivo. Sin el skill, el mismo `sed -n -i` pidió aprobación. Una regla con prefijo se salta la detección de comandos que escriben; una regla sin `*` casa solo el comando exacto ("A rule with no `*` matches one exact command").
 - Los skills no aceptan `tools` ni `permissionMode`: la restricción de solo lectura va en el agente.
 
+**Verificado para los perfiles (Hito 3, 23 nov 2026).** Cada viñeta de las reglas sale de estas páginas; lo que no se pudo leer textual quedó fuera (por ejemplo, los scripts que crea `create-next-app` y el retiro de `attrs` en Odoo):
+
+- **nextjs**, Next.js 16 (16.4 estable): [guía de actualización a 16](https://nextjs.org/docs/app/guides/upgrading/version-16) (APIs asíncronas, `proxy.ts`, retiro de `next lint`, Turbopack por defecto, Node 20.9), [Server and Client Components](https://nextjs.org/docs/app/getting-started/server-and-client-components) y [CLI `next`](https://nextjs.org/docs/app/api-reference/cli/next) (`typegen`).
+- **supabase**, CLI v3 (2 nov 2026): [changelog de la v3](https://supabase.com/changelog/supabase-cli-v3) (local por defecto, `--remote`, confirmaciones), [migraciones](https://supabase.com/docs/guides/deployment/database-migrations), [RLS](https://supabase.com/docs/guides/database/postgres/row-level-security), [generar tipos](https://supabase.com/docs/guides/api/rest/generating-types) y [Next.js con `@supabase/ssr`](https://supabase.com/docs/guides/auth/server-side/nextjs).
+- **odoo-addon**, Odoo 19.0 y 20.0 (20.0 salió en sept. 2026): CLI (`scaffold`, `--addons-path`, `--test-tags`), coding guidelines, arquitectura de vistas (`<list>`, antes `<tree>`), testing y el tutorial de seguridad, leídos en ambas versiones. Diferencia que entra en la regla: los permisos van en `security/ir.model.access.csv` en 19.0 y en `security/ir.access.csv` (modelo `ir.access`) en 20.0. Python: 3.10+ en 19.0 y 3.12+ en 20.0.
+- [Memoria y reglas](https://code.claude.com/docs/en/memory): `paths` acepta una lista YAML de globs (con llaves); una regla con `paths` se carga cuando Claude lee, escribe o edita un archivo que casa.
+
 ## 6. Datos e integraciones
 
 El único dato persistente es `.claude/starter.lock` en cada proyecto generado; la v0.1 no usa base de datos, APIs ni red. Ejemplo abreviado para un Tier 1 con stack (se omiten entradas y los hashes, de 64 caracteres hexadecimales, se acortan):
@@ -247,6 +254,14 @@ Para los seeded solo compara L con S y reporta tres estados: `faltante` (la ruta
 
 En total, `starter-diff` tiene **11 estados**: 8 managed y 3 seeded.
 
+Detalles decididos en el Hito 3 (sección 9):
+- **Perfil retirado (C10):** si un perfil del lock ya no existe, S se compone sin él, se avisa en stderr y sus managed salen como `retirado`.
+- **Segunda pasada (C14):** las rutas managed de S que el lock no lista se evalúan aparte. Si no existen en el proyecto, `nuevo-en-starter`; si existen, `actualizado-sin-registrar` cuando P = S y `conflicto` cuando P ≠ S.
+- **Seeded fuera del starter:** una ruta seeded del lock que ya no está en S se reporta como `plantilla-cambió`, con la nota "ya no está en el starter" (C12).
+- **Enlaces y directorios:** `starter-diff` solo lee archivos regulares dentro del proyecto. Un enlace simbólico o un directorio en una ruta managed da `conflicto` sin leerlo, y un lock que no es un archivo regular dentro del proyecto es error. El lock también es inválido si su `stack` no está normalizado o si una ruta está en la sección que no le corresponde según los patrones.
+- **Solo lectura:** `starter-diff` no escribe nada. Para cada estado que toca el lock imprime la línea exacta (`lock: <sha256>  <ruta>` para añadir o cambiar, o `lock: quitar la línea de <ruta>`) y la persona edita el lock.
+- **Salida y código:** una línea `<clase>  <estado>  <ruta>` por archivo, ordenada por clase y ruta, con la acción sugerida debajo de cada estado no limpio, y un resumen con el conteo por estado. Sale con 0 si completó el reporte, haya o no divergencias, y con 1 ante un error (proyecto o lock inexistente, lock inválido, ruta del lock absoluta o con `..`).
+
 **Qué no se guarda:** secretos, rutas absolutas del usuario, correos ni nombres de clientes o empresas. El lock guarda solo rutas relativas.
 
 **Integraciones:** solo `git` local (init y primer commit), `sha256sum` y coreutils con `sed`. El generador imprime el comando `git remote add` descrito en la sección 5, pero no toca la red.
@@ -281,7 +296,7 @@ Cinco hitos, de 5 a 6 sesiones de Claude Code en total. El código del Hito 1 no
 - Entregables: `bin/new-project`, `lib/common.sh`, capas `core` y `t1` (sin skills todavía), lock, primer commit, `tests/smoke.sh` para Tier 0 y 1 y README mínimo.
 - Criterio de aceptación: `tests/smoke.sh` verde para Tier 0 y 1; un destino existente, un slug inválido y una carpeta padre inexistente terminan con error y sin escribir nada; al abrir `claude` en un proyecto generado, `/memory` lista su `CLAUDE.md`.
 - Riesgo: sustitución de placeholders frágil. Smoke verifica cero `{{` restantes.
-- Estado: Cerrado (23 nov 2026).
+- Estado: Cerrado (23 nov 2026, commit `854f76a`).
 
 **Hito 2 · Subagente y skills (1,5 sesiones)**
 
@@ -289,6 +304,7 @@ Cinco hitos, de 5 a 6 sesiones de Claude Code en total. El código del Hito 1 no
 - Entregables: `goldfish-revisor`, skills `hito`, `cierre-hito`, `revisar-diff`, `revisar-diseno` y `bitacora`, plantillas de ADR y PRD, y `tests/fixtures/` con defectos conocidos.
 - Criterio de aceptación: un spike inicial confirma que `context: fork`, `agent` y la inyección del diff con `!` + comando funcionan (si no, plan B de la sección 9); sobre los fixtures, `/revisar-diff` encuentra el defecto sembrado y `/revisar-diseno` lista lo omitido; `git status` es idéntico antes y después; `/cierre-hito` no crea commits.
 - Riesgo: dependen de comportamiento de Claude Code. La verificación manual queda documentada en `docs/verificacion.md`.
+- Estado: Cerrado (23 nov 2026, commit `7bd2fb6`).
 
 **Hito 3 · Perfiles y starter-diff (1 sesión)**
 
@@ -296,6 +312,7 @@ Cinco hitos, de 5 a 6 sesiones de Claude Code en total. El código del Hito 1 no
 - Entregables: perfiles `nextjs`, `supabase` y `odoo-addon` (escritos con la documentación vigente de cada uno) y `bin/starter-diff`.
 - Criterio de aceptación: smoke verde en los 4 Tiers y en las combinaciones `nextjs`, `nextjs,supabase` y `odoo-addon`; sobre un proyecto manipulado a propósito, `starter-diff` reporta cada uno de los 11 estados de la sección 6 al menos una vez y con la clasificación correcta: 8 managed (faltante, retirado, limpio, desactualizado, actualizado-sin-registrar, modificado, conflicto, nuevo-en-starter) y 3 seeded (faltante, plantilla-sin-cambios, plantilla-cambió).
 - Riesgo: los comandos de cada stack cambian. Cada perfil lleva su fecha de verificación.
+- Estado: Cerrado (23 nov 2026), pendiente el commit.
 
 **Hito 4 · Publicación y primer uso real (0,5 a 1 sesión)**
 
@@ -366,11 +383,14 @@ El riesgo dominante es la deriva: que Claude Code cambie sus formatos o que los 
 **Preguntas abiertas:**
 
 - [ ] ¿README en español, inglés o bilingüe? Afecta al portafolio; se decide antes del Hito 4.
-- [ ] ¿Cuál es la ruta de addons de Odoo en el nuevo setup de WSL? La necesita el perfil `odoo-addon` (Hito 3).
-- [ ] ¿Se habilita el sandbox de Claude Code en WSL2? No se evaluó en el Hito 2; queda para el Hito 3.
+- [x] ¿Cuál es la ruta de addons de Odoo en el nuevo setup de WSL? La necesita el perfil `odoo-addon` (Hito 3). **Decidido (Hito 3):** el starter no guarda ninguna ruta. La raíz del proyecto generado es el directorio de addons (un módulo por carpeta, `<raíz>/<modulo>/`), y los comandos del perfil usan `$ODOO_BIN` y `--addons-path="$ODOO_ADDONS_PATH,."`, variables que la persona define en su entorno. El perfil es agnóstico de versión: solo lleva convenciones vigentes en 19.0 y 20.0, y la versión concreta sale del `version` de `__manifest__.py`.
+- [ ] ¿Se habilita el sandbox de Claude Code en WSL2? No se evaluó en el Hito 2 ni entra en el Hito 3; queda pendiente, sin hito asignado.
 - [x] ¿Debe Claude poder mantener `.env.example`? **Decidido (Hito 2):** no; se mantiene el `deny` actual. El `CLAUDE.md` generado (core y t1) lleva la convención: Claude no edita `.env.example` y, si añade una variable de entorno, indica la línea exacta para que la persona la añada.
 - [ ] ¿Qué organización de GitHub usan los proyectos de `work`? No se escribe en el repo: se da con `STARTER_WORK_OWNER`, y sin ella el generador imprime `<ORG>`.
-- [ ] ¿Cómo se registra en el lock una actualización aceptada (estados actualizado-sin-registrar, retirado y nuevo-en-starter)? ¿Un modo de `starter-diff` o edición manual de las entradas? Se decide en el Hito 3, junto con dos detalles de `starter-diff` que salieron en la revisión goldfish del Hito 0: un perfil retirado del starter debe dar `retirado` y no un error (C10); y `nuevo-en-starter` se evalúa en una pasada aparte, y si la ruta ya existe en el proyecto se reporta como conflicto (C14).
+- [x] ¿Cómo se registra en el lock una actualización aceptada (estados actualizado-sin-registrar, retirado y nuevo-en-starter)? ¿Un modo de `starter-diff` o edición manual de las entradas? Se decide en el Hito 3, junto con dos detalles de `starter-diff` que salieron en la revisión goldfish del Hito 0: un perfil retirado del starter debe dar `retirado` y no un error (C10); y `nuevo-en-starter` se evalúa en una pasada aparte, y si la ruta ya existe en el proyecto se reporta como conflicto (C14). **Decidido (Hito 3):**
+  - **Aceptación:** manual. `starter-diff` es de solo lectura e imprime la línea exacta del lock que hay que añadir, cambiar o quitar; la persona edita el lock. No cambia el contrato.
+  - **C10:** si un perfil del lock ya no existe en `template/profiles/`, `starter-diff` compone S sin él, avisa en stderr y sus managed salen como `retirado`.
+  - **C14:** `nuevo-en-starter` se evalúa en una segunda pasada. Si la ruta ya existe en el proyecto, P = S da `actualizado-sin-registrar` y P ≠ S da `conflicto`. Siguen siendo 11 estados.
 - [x] ¿Cuál manda si difieren: los patrones de managed de la sección 6 o la columna "Lock" de la tabla de archivos por capa de la sección 5? (C13). **Decidido (Hito 1):** los patrones son normativos y la tabla descriptiva; smoke lleva la tabla esperada y comprueba que la clasificación por patrón coincide.
 - [x] ¿Se toleran espacios alrededor de `{{GOBIERNO}}` y `{{COMANDOS_STACK}}` en su línea? (C17). **Decidido (Hito 1):** no; la línea debe ser exactamente el marcador. Con espacios no es fragmento, queda un `{{` y la generación falla.
 - [x] ¿`starter_commit` debe marcarse `-dirty` también por cambios en `lib/` y `bin/`? (C18). **Decidido (Hito 1):** sí; `-dirty` si `template/`, `lib/`, `bin/` o `VERSION` tienen cambios sin commitear, incluidos archivos sin seguimiento o ignorados (un ignorado en `template/` se copiaría sin publicarse). Cambios en `docs/` o `tests/` no cuentan.
@@ -451,7 +471,7 @@ Cada proyecto nuevo con Claude Code obligaba a rehacer la misma estructura de co
 - Lock en texto plano con hashes, para detectar divergencias sin jq ni Python.
 
 ## Solución
-Hito 1 (23 nov 2026): `bin/new-project` genera proyectos Tier 0 y 1 desde las capas `core` y `t1`, valida todo antes de escribir, construye en un temporal, mueve con `mv -T` y hace el primer commit; deja `.claude/starter.lock` con la versión, el commit del starter y los hashes. Hito 2 (23 nov 2026): subagente `goldfish-revisor` de solo lectura y sin `CLAUDE.md`; skills `/hito`, `/revisar-diff`, `/cierre-hito`, `/bitacora` y `/revisar-diseno`; capas `t2` (PRD y ADR) y `t3` (CHANGELOG y gobierno). Pendiente: perfiles y `starter-diff` (Hito 3).
+Hito 1 (23 nov 2026): `bin/new-project` genera proyectos Tier 0 y 1 desde las capas `core` y `t1`, valida todo antes de escribir, construye en un temporal, mueve con `mv -T` y hace el primer commit; deja `.claude/starter.lock` con la versión, el commit del starter y los hashes. Hito 2 (23 nov 2026, commit `7bd2fb6`): subagente `goldfish-revisor` de solo lectura y sin `CLAUDE.md`; skills `/hito`, `/revisar-diff`, `/cierre-hito`, `/bitacora` y `/revisar-diseno`; capas `t2` (PRD y ADR) y `t3` (CHANGELOG y gobierno). Hito 3 (23 nov 2026): perfiles `nextjs` (Next.js 16), `supabase` (CLI v3) y `odoo-addon` (Odoo 19.0 y 20.0), cada uno con una regla que Claude carga solo al tocar archivos del stack y sus comandos en `CLAUDE.md`; y `bin/starter-diff`, que compara un proyecto con el starter actual en 11 estados, sin escribir nada, e imprime la línea del lock que hay que editar.
 
 ## Cómo se usó Claude Code
 Planeación en el Estudio de Proyectos (clasificación por Tier y Dossier). Construcción con E/G ligero: revisión goldfish del contrato y del diff de cada hito. La del diff del Hito 1 se hizo a mano (0 altos, 2 medios, 8 bajos), antes de tener `/revisar-diff`. En el Hito 2, un spike con canarios comprobó el aislamiento antes de escribir los skills:
@@ -468,7 +488,7 @@ Hito 1: smoke con 53 checks en verde, shellcheck limpio y `/memory` verificado a
 - `/cierre-hito` no commiteó, ni con el check en rojo ni en verde;
 - `/bitacora` omitió los nombres en modo anonimizado.
 
-En todos los casos, `git status` quedó idéntico. Las métricas de la sección 3 del Dossier se llenarán al cerrar los hitos.
+En todos los casos, `git status` quedó idéntico. Hito 3: smoke con 178 checks en verde en 6 s, incluidas las combinaciones de stack y un proyecto manipulado que provoca los 11 estados de `starter-diff`. Dos mutaciones deliberadas (escribir en el proyecto y seguir enlaces simbólicos) hacen fallar el smoke. La revisión goldfish del diff dio 0 altos, 2 medios y 6 bajos, todos aplicados. Las métricas de la sección 3 del Dossier se llenarán al cerrar los hitos.
 
 ## Aprendizajes
 Las reglas `includeIf gitdir:` solo se evalúan dentro de un repo: un diagnóstico de identidad hecho desde la carpeta padre no las ve. La identidad por ruta pasa a ser requisito documentado.
@@ -477,4 +497,9 @@ Hito 2:
 - Los skills con `context: fork` corren en segundo plano salvo con `background: false`.
 - Un `deny` de `Read` también bloquea la edición y la creación del archivo. Con el `deny` actual, Claude no puede mantener `.env.example`.
 - Un canario por fuente de contexto es la forma más barata de probar el aislamiento de un subagente.
+- Un comodín en `allowed-tools` preaprueba más de lo que parece: con `Bash(sed -n *)` y `Bash(git diff *)`, Claude ejecutó sin preguntar `sed -n -i`, que truncó un archivo, y `git diff --output`, que creó otro. Fuera del skill, el mismo `sed -n -i` pedía aprobación. Los skills pasaron a reglas exactas y a leer con Read y Grep, y una regla de smoke prohíbe `*` en `allowed-tools`.
+
+Hito 3:
+- La documentación vigente cambió más de lo esperado en el mismo año: Supabase CLI v3 (2 nov 2026) pasó a local por defecto con `--remote`, y Odoo 20 movió los permisos de `ir.model.access.csv` a `ir.access.csv`. Una regla escrita de memoria habría salido mal en ambos casos; leer la página antes de cada viñeta y dejar fuera lo no verificable es lo que hace confiable un perfil.
+- Una prueba de "solo lectura" basada en nombres de archivo y `git status` no detecta una reescritura de un archivo ya modificado; hace falta comparar contenido. Lo encontró el goldfish, y una mutación lo confirma.
 ```

@@ -64,7 +64,7 @@ seccion() { # seccion <lock> managed|seeded
 	fi
 }
 
-verificar_lock() { # verificar_lock <proyecto> <tabla> <slug> <tipo> <tier> <metodologia> <visibilidad>
+verificar_lock() { # verificar_lock <proyecto> <tabla> <slug> <tipo> <tier> <metodologia> <visibilidad> [stack]
 	local p=$1 tabla=$2 lock=$1/.claude/starter.lock
 	local esperado_cab
 	esperado_cab="# project-starter lock: editar solo las entradas, nunca la cabecera
@@ -75,7 +75,7 @@ slug=$3
 tipo=$4
 tier=$5
 metodologia=$6
-stack=
+stack=${8:-}
 visibilidad=$7
 generated_at="
 	local cab
@@ -217,6 +217,48 @@ printf '\n== Tier 3\n'
 verificar_proyecto "$R/personal/nueve" 3 60
 verificar_lock "$R/personal/nueve" "$TABLA_T3" nueve personal 3 eg anonimizado
 
+printf '\n== Perfiles de stack\n'
+regla() { printf '.claude/rules/stack-%s.md|profiles/%s/dot-claude/rules/stack-%s.md|M' "$1" "$1" "$1"; }
+verificar_stack() { # verificar_stack <proyecto> <tier> <perfil…> (en orden normalizado)
+	local p=$1 t=$2 perfil fm malos='' esperado=''
+	shift 2
+	for perfil in "$@"; do
+		# Regla managed con paths: (lista YAML de patrones entre comillas) y sin '{{'.
+		fm=$(sed -n '1{/^---$/!q};1d;/^---$/q;p' "$p/.claude/rules/stack-$perfil.md")
+		grep -qx 'paths:' <<<"$fm" && grep -qE '^  - ".+"$' <<<"$fm" || malos+="(paths)$perfil "
+		grep -qE '^Verificado el [0-9]{4}-[0-9]{2}-[0-9]{2}' "$p/.claude/rules/stack-$perfil.md" || malos+="(fecha)$perfil "
+		esperado+=$(<"$STARTER/template/profiles/$perfil/_fragmentos/comandos.md")$'\n'
+	done
+	if [[ -z $malos ]]; then ok "stack T$t ($*): reglas con paths: y fecha de verificación"; else mal "stack T$t ($*): reglas" "$malos"; fi
+	if ((t == 0)); then
+		if grep -qF -- "$(head -n1 "$STARTER/template/profiles/$1/_fragmentos/comandos.md")" "$p/CLAUDE.md"; then
+			mal "stack T0: CLAUDE.md no debería llevar comandos del stack"
+		else
+			ok "stack T0: regla sí, comandos del stack no"
+		fi
+	elif [[ $(<"$p/CLAUDE.md") == *"$esperado"* ]]; then
+		ok "stack T$t ($*): fragmentos de comandos en CLAUDE.md, en orden"
+	else
+		mal "stack T$t ($*): fragmentos de comandos"
+	fi
+}
+check "genera Tier 1 --stack nextjs" "$NP" diez --tipo personal --tier 1 --stack nextjs
+check "genera Tier 2 --stack Supabase,nextjs,supabase (normaliza)" "$NP" once --tipo work --tier 2 --stack Supabase,nextjs,supabase
+check "genera Tier 3 --stack odoo-addon" "$NP" doce --tipo personal --tier 3 --stack odoo-addon
+check "genera Tier 0 --stack nextjs" "$NP" trece --tipo personal --tier 0 --stack nextjs
+verificar_proyecto "$R/personal/diez" 1 60
+verificar_lock "$R/personal/diez" "$(tabla "$TABLA_T1" "$(regla nextjs)")" diez personal 1 eg-ligero publico nextjs
+verificar_stack "$R/personal/diez" 1 nextjs
+verificar_proyecto "$R/work/once" 2 60
+verificar_lock "$R/work/once" "$(tabla "$TABLA_T2" "$(regla nextjs)" "$(regla supabase)")" once work 2 eg privado nextjs,supabase
+verificar_stack "$R/work/once" 2 nextjs supabase
+verificar_proyecto "$R/personal/doce" 3 60
+verificar_lock "$R/personal/doce" "$(tabla "$TABLA_T3" "$(regla odoo-addon)")" doce personal 3 eg publico odoo-addon
+verificar_stack "$R/personal/doce" 3 odoo-addon
+verificar_proyecto "$R/personal/trece" 0 15
+verificar_lock "$R/personal/trece" "$(tabla "$TABLA_T0" "$(regla nextjs)")" trece personal 0 ninguna publico nextjs
+verificar_stack "$R/personal/trece" 0 nextjs
+
 printf '\n== Visibilidad por defecto\n'
 check "personal → publico" grep -qx 'visibilidad=publico' "$R/personal/uno/.claude/starter.lock"
 check "work → privado" grep -qx 'visibilidad=privado' "$R/work/dos/.claude/starter.lock"
@@ -230,7 +272,8 @@ rechazo "tipo inválido" "$R" tres --tipo otro --tier 0
 PROJECTS_ROOT=$R/vacio rechazo "carpeta padre inexistente" "$R" tres --tipo personal --tier 0
 rechazo "Tier fuera de rango" "$R" tres --tipo personal --tier 4
 rechazo "visibilidad inválida" "$R" tres --tipo personal --tier 0 --visibilidad secreta
-rechazo "perfil desconocido" "$R" tres --tipo personal --tier 1 --stack nextjs
+rechazo "perfil desconocido" "$R" tres --tipo personal --tier 1 --stack nextjs,inexistente
+rechazo "perfil con nombre inválido" "$R" tres --tipo personal --tier 1 --stack 'next_js'
 rechazo "opción desconocida" "$R" tres --tipo personal --tier 0 --color azul
 
 printf '\n== Fallo de git\n'
@@ -274,6 +317,12 @@ if sed -n '/^--managed--$/,/^--seeded--$/{/^--/d;p}' <<<"$salida" | cut -c67- | 
 else
 	mal "composición: clasificación managed por patrón"
 fi
+copia c7 && mkdir -p "$R/c7/template/profiles/nextjs/docs" && printf 'x\n' >"$R/c7/template/profiles/nextjs/docs/extra.md"
+if "$R/c7/bin/new-project" seis --tipo personal --tier 1 --stack nextjs --dry-run >/dev/null 2>&1; then
+	mal "composición: un perfil que aporta algo distinto de su regla debería fallar"
+else
+	ok "composición: un perfil solo aporta su regla y su fragmento"
+fi
 clasifica() ( # clasifica <ruta> → M o S según es_managed
 	STARTER_ROOT=$STARTER
 	# shellcheck source=lib/common.sh
@@ -286,6 +335,129 @@ for par in .claude/agents/x.md:M .claude/skills/hito/SKILL.md:M .claude/rules/st
 	[[ $(clasifica "${par%:*}") == "${par##*:}" ]] || malos+="$par "
 done
 if [[ -z $malos ]]; then ok "patrones managed/seeded coinciden con la columna Lock de §5 (C13)"; else mal "patrones managed/seeded" "$malos"; fi
+
+printf '\n== starter-diff\n'
+SD=$STARTER/bin/starter-diff
+no_limpios=''
+for p in personal/uno work/dos work/ocho personal/nueve work/once personal/doce personal/trece; do
+	if ! salida=$("$SD" "$R/$p" 2>&1) || grep -vqE '^(# |managed  limpio  |seeded  plantilla-sin-cambios  )' <<<"$salida"; then
+		no_limpios+="$p "
+	fi
+done
+if [[ -z $no_limpios ]]; then ok "starter-diff tras generar: solo limpio y plantilla-sin-cambios, código 0"; else mal "starter-diff tras generar" "$no_limpios"; fi
+huella() { # huella <dir>: rutas, tipos y contenido (para probar que nada se escribe)
+	(cd "$1" && find . -path ./.git -prune -o -printf '%y %p\n' | LC_ALL=C sort &&
+		find . -path ./.git -prune -o -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum)
+}
+
+# Fixture: proyecto Tier 2 nextjs,supabase generado con una copia del starter;
+# después se manipulan la copia (S) y el proyecto (P) para provocar los 11 estados.
+copia sd
+"$R/sd/bin/new-project" sd --tipo personal --tier 2 --stack nextjs,supabase >/dev/null 2>&1
+T=$R/sd/template PJ=$R/personal/sd
+rm "$PJ/.claude/skills/hito/SKILL.md"                         # managed faltante
+rm -r "$T/profiles/nextjs"                                    # managed retirado (C10)
+rm "$T/t1/dot-claude/agents/goldfish-revisor.md"               # managed retirado (de una capa)
+rm "$T/t2/docs/adr/0000-plantilla.md"                          # seeded fuera del starter (C12)
+printf 'cambio\n' >>"$T/t1/dot-claude/skills/bitacora/SKILL.md" # managed desactualizado
+printf 'cambio\n' >>"$T/t1/dot-claude/skills/cierre-hito/SKILL.md"
+cp "$T/t1/dot-claude/skills/cierre-hito/SKILL.md" "$PJ/.claude/skills/cierre-hito/SKILL.md" # actualizado-sin-registrar
+printf 'local\n' >>"$PJ/.claude/skills/revisar-diff/SKILL.md"                               # managed modificado
+printf 'starter\n' >>"$T/t2/dot-claude/skills/revisar-diseno/SKILL.md"
+printf 'local\n' >>"$PJ/.claude/skills/revisar-diseno/SKILL.md" # managed conflicto
+for s in nuevo otro igual; do
+	mkdir -p "$T/t1/dot-claude/skills/$s" && printf -- '---\nname: %s\n---\n' "$s" >"$T/t1/dot-claude/skills/$s/SKILL.md"
+done # nuevo-en-starter; otro e igual: C14
+mkdir -p "$PJ/.claude/skills/otro" "$PJ/.claude/skills/igual"
+printf 'propio\n' >"$PJ/.claude/skills/otro/SKILL.md"
+cp "$T/t1/dot-claude/skills/igual/SKILL.md" "$PJ/.claude/skills/igual/SKILL.md"
+rm "$PJ/docs/prd.md"                  # seeded faltante
+printf 'cambio\n' >>"$T/t1/docs/plan.md" # seeded plantilla-cambió
+
+antes=$(huella "$PJ")
+estado_git=$(git -C "$PJ" status --porcelain)
+rc=0
+salida=$("$R/sd/bin/starter-diff" "$PJ" 2>"$R/sd.err") || rc=$?
+if ((rc == 0)); then ok "starter-diff manipulado: código 0"; else mal "starter-diff manipulado: código $rc" "$(cat "$R/sd.err")"; fi
+malos=''
+while IFS= read -r esperada; do
+	grep -qxF -- "$esperada" <<<"$salida" || malos+="[$esperada] "
+done <<'EOF'
+managed  faltante  .claude/skills/hito/SKILL.md
+managed  retirado  .claude/rules/stack-nextjs.md
+managed  retirado  .claude/agents/goldfish-revisor.md
+managed  limpio  .claude/rules/stack-supabase.md
+managed  desactualizado  .claude/skills/bitacora/SKILL.md
+managed  actualizado-sin-registrar  .claude/skills/cierre-hito/SKILL.md
+managed  modificado  .claude/skills/revisar-diff/SKILL.md
+managed  conflicto  .claude/skills/revisar-diseno/SKILL.md
+managed  nuevo-en-starter  .claude/skills/nuevo/SKILL.md
+managed  conflicto  .claude/skills/otro/SKILL.md
+managed  actualizado-sin-registrar  .claude/skills/igual/SKILL.md
+seeded  faltante  docs/prd.md
+seeded  plantilla-sin-cambios  docs/spec.md
+seeded  plantilla-cambió  docs/plan.md
+seeded  plantilla-cambió  docs/adr/0000-plantilla.md
+EOF
+if [[ -z $malos ]]; then ok "starter-diff manipulado: los 11 estados (8 managed, 3 seeded) y C14 con la clasificación correcta"; else mal "starter-diff manipulado: estados" "$malos"; fi
+n=$(grep -cE '^(managed|seeded)  ' <<<"$salida")
+if ((n == 21)); then ok "starter-diff manipulado: una línea por archivo (21)"; else mal "starter-diff manipulado: $n líneas de estado (se esperaban 21)"; fi
+sugiere() { # sugiere <línea de estado> <línea esperada debajo>
+	grep -A2 -xF -- "$1" <<<"$salida" | grep -qxF -- "$2"
+}
+sha_t() { sha256sum <"$T/$1" | cut -c1-64; }
+malos=''
+for c in 'actualizado-sin-registrar|cierre-hito|t1' 'desactualizado|bitacora|t1' 'nuevo-en-starter|nuevo|t1' 'actualizado-sin-registrar|igual|t1'; do
+	IFS='|' read -r estado skill capa <<<"$c"
+	sugiere "managed  $estado  .claude/skills/$skill/SKILL.md" \
+		"  lock: $(sha_t "$capa/dot-claude/skills/$skill/SKILL.md")  .claude/skills/$skill/SKILL.md" || malos+="$estado/$skill "
+done
+sugiere 'managed  retirado  .claude/rules/stack-nextjs.md' '  lock: quitar la línea de .claude/rules/stack-nextjs.md' || malos+="retirado "
+sugiere 'seeded  plantilla-cambió  docs/adr/0000-plantilla.md' '  → ya no está en el starter: revisar a mano y retirar la entrada' || malos+="C12 "
+if [[ -z $malos ]]; then
+	ok "starter-diff manipulado: líneas de lock exactas (cambiar, añadir, quitar) y nota C12"
+else
+	mal "starter-diff manipulado: líneas de lock sugeridas" "$malos"
+fi
+if grep -q "perfil 'nextjs'.*C10" "$R/sd.err"; then ok "starter-diff manipulado: aviso en stderr por el perfil retirado (C10)"; else mal "starter-diff: aviso C10" "$(cat "$R/sd.err")"; fi
+if [[ $antes == "$(huella "$PJ")" && $estado_git == "$(git -C "$PJ" status --porcelain)" ]]; then
+	ok "starter-diff es de solo lectura: rutas, contenido y git status idénticos"
+else
+	mal "starter-diff modificó el proyecto"
+fi
+
+# Enlaces simbólicos y directorios: no se lee fuera del proyecto.
+cp -a "$R/personal/diez" "$R/enlaces"
+printf 'externo\n' >"$R/externo.md"
+ln -sf "$R/externo.md" "$R/enlaces/.claude/skills/hito/SKILL.md"
+rm "$R/enlaces/.claude/skills/bitacora/SKILL.md" && mkdir "$R/enlaces/.claude/skills/bitacora/SKILL.md"
+salida=$("$SD" "$R/enlaces" 2>/dev/null || true)
+if grep -qxF 'managed  conflicto  .claude/skills/hito/SKILL.md' <<<"$salida" &&
+	grep -qxF 'managed  conflicto  .claude/skills/bitacora/SKILL.md' <<<"$salida"; then
+	ok "starter-diff: un enlace simbólico o un directorio en una ruta managed da conflicto, sin leerlo"
+else
+	mal "starter-diff: enlaces y directorios" "$(grep -E 'hito|bitacora' <<<"$salida")"
+fi
+cp -a "$R/personal/diez" "$R/enlace2"
+mv "$R/enlace2/.claude" "$R/claude-fuera" && ln -s "$R/claude-fuera" "$R/enlace2/.claude"
+
+sd_falla() { # sd_falla <descripción> <proyecto>
+	if "$SD" "$2" >/dev/null 2>&1; then mal "starter-diff: $1 debería fallar"; else ok "starter-diff: $1 falla"; fi
+}
+sd_falla "proyecto inexistente" "$R/no-existe"
+sd_falla "proyecto sin lock" "$R/vacio"
+sd_falla ".claude enlazado fuera del proyecto" "$R/enlace2"
+lock_malo() { # lock_malo <descripción> <comando sed sobre el lock de personal/diez>
+	local d=$R/lock$((++n_lock))
+	mkdir -p "$d/.claude" && sed "$2" "$R/personal/diez/.claude/starter.lock" >"$d/.claude/starter.lock"
+	sd_falla "$1" "$d"
+}
+n_lock=0
+lock_malo "cabecera fuera de orden" '5{h;d};6{G}'
+lock_malo "ruta del lock con '..'" "\$a0000000000000000000000000000000000000000000000000000000000000000  ../fuera.md"
+lock_malo "ruta del lock absoluta" "\$a0000000000000000000000000000000000000000000000000000000000000000  /etc/hosts"
+lock_malo "stack sin normalizar" 's/^stack=.*/stack=nextjs,nextjs/'
+lock_malo "managed en --seeded--" "\$a0000000000000000000000000000000000000000000000000000000000000000  .claude/skills/x/SKILL.md"
 
 printf '\n== --dry-run\n'
 antes=$(snapshot "$R/personal")
