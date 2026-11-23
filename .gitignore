@@ -1,1 +1,5 @@
 *:Zone.Identifier
+# Secretos y archivos personales: nunca en un repo público
+.env*
+.claude/settings.local.json
+secrets/

@@ -1,2 +1,12 @@
 # Metadatos que Windows añade al descargar archivos en WSL (flujo alterno Zone.Identifier)
 *:Zone.Identifier
+
+# Configuración personal de Claude Code
+.claude/settings.local.json
+CLAUDE.local.md
+
+# Secretos (.env.example sí se versiona: documenta las variables sin valores reales)
+.env
+.env.*
+!.env.example
+secrets/

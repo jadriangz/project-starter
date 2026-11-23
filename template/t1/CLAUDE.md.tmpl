@@ -1,0 +1,24 @@
+# {{SLUG}}
+Proyecto {{TIPO}} · Tier {{TIER}} · metodología {{METODOLOGIA}} · visibilidad {{VISIBILIDAD}}. Generado el {{FECHA}} con project-starter.
+
+## Comandos
+<!-- Completa: cómo instalar, correr, probar y revisar estilo. -->
+{{COMANDOS_STACK}}
+
+## Estructura
+- `docs/brief.md` qué es y para quién · `docs/spec.md` qué hace y su contrato · `docs/plan.md` hitos y estado · `docs/bitacora.md` decisiones y avances.
+
+## Convenciones
+- Cambios pequeños, con mensaje claro; un tema por commit.
+- Nunca leer ni escribir secretos (`.env`, `secrets/`). Si hacen falta, pídelos.
+- Visibilidad {{VISIBILIDAD}}: no escribir en el repo nada que no pueda verse con esa visibilidad.
+
+## Cómo trabajar aquí
+- Plan mode antes de cambios no triviales. Una sesión por hito de `docs/plan.md`.
+- Fuente de verdad: `docs/spec.md` (qué y por qué) y `docs/plan.md` (cuándo). Si el código y la spec difieren, preguntar.
+- Metodología {{METODOLOGIA}}: revisión goldfish (contexto limpio, solo criterio y diff) al cerrar cada hito.
+- No commitear sin que se pida.
+{{GOBIERNO}}
+
+## Definición de hecho
+Checks verdes, criterio de aceptación del hito cumplido, `docs/plan.md` actualizado y entrada en `docs/bitacora.md`.

@@ -2,14 +2,14 @@
 
 Derivado de la sección 7 de [`docs/dossier.md`](dossier.md). Los criterios de aceptación se copian literales; si cambian, cambian primero en el Dossier.
 
-- **Estado global:** Hito 0 cerrado (23 nov 2026). Siguiente: Hito 1, en una sesión nueva.
+- **Estado global:** Hito 0 cerrado (23 nov 2026). Hito 1 hecho (23 nov 2026): smoke 53/53, shellcheck limpio y `/memory` verificado a mano; pendiente el commit del starter.
 - **Regla:** una sesión de Claude Code por hito, en plan mode. El código del Hito 1 no empieza hasta cumplir el criterio del Hito 0.
 - **Cierre de cada hito:** checks verdes, `CLAUDE.md` del starter actualizado y entrada de bitácora.
 
 | Hito | Nombre | Sesiones | Estado |
 | --- | --- | --- | --- |
 | 0 | Contrato revisado | 0,5 | Cerrado |
-| 1 | Generador y capas base | 2 | Siguiente |
+| 1 | Generador y capas base | 2 | Hecho |
 | 2 | Subagente y skills | 1,5 | Pendiente |
 | 3 | Perfiles y starter-diff | 1 | Pendiente |
 | 4 | Publicación y primer uso real | 0,5 a 1 | Pendiente |
@@ -37,17 +37,23 @@ Tareas:
 
 El contrato que se implementa está en las secciones 5 y 6 del Dossier (tabla de archivos por capa, reglas de composición, algoritmo de `new-project` y gramática del lock). Antes de empezar, decidir las preguntas abiertas de la sección 9 marcadas "Hito 1" (C13, C17, C18 y C22).
 
+Decisiones del inicio del Hito 1 (registradas en la sección 9 del Dossier):
+- **C13:** los patrones de managed de la sección 6 son normativos; la tabla de la sección 5 es descriptiva. Smoke comprueba que coinciden.
+- **C17:** la línea del marcador debe ser exactamente `{{GOBIERNO}}` o `{{COMANDOS_STACK}}`; con espacios, la generación falla.
+- **C18:** `-dirty` por cambios sin commitear (incluidos sin seguimiento) en `template/`, `lib/`, `bin/` o `VERSION`.
+- **C22:** el `.gitignore` generado lleva `.env`, `.env.*` y `!.env.example` (más `secrets/`); el `deny` de `settings.json` no cambia.
+
 **Fuera de alcance:** perfiles, capas `t2` y `t3`, agente, skills y `starter-diff`. En este hito la sección managed del lock queda vacía en ambos Tiers.
 
 Pasos, en orden:
-- [ ] **1. Verificar la documentación de Claude Code:**
+- [x] **1. Verificar la documentación de Claude Code:**
   - semántica de `Read(**/.env)` y `Read(**/.env.*)`;
   - si `Bash(git commit *)` cubre `git commit` sin argumentos;
   - carga de `CLAUDE.md` anidados y descubrimiento de skills en subdirectorios, que justifican `dot-` y `.tmpl`.
 
   Anotar el resultado en "Verificado" de la sección 5 del Dossier.
-- [ ] **2. `VERSION` y `CHANGELOG.md`:** `VERSION` con `0.1.0`; `CHANGELOG.md` con la sección `[Unreleased]`.
-- [ ] **3. `lib/common.sh`**, solo funciones y sin efectos al cargarse:
+- [x] **2. `VERSION` y `CHANGELOG.md`:** `VERSION` con `0.1.0`; `CHANGELOG.md` con la sección `[Unreleased]`.
+- [x] **3. `lib/common.sh`**, solo funciones y sin efectos al cargarse:
   - `die` y `log` (a stderr);
   - validaciones de slug, tipo, tier, visibilidad y perfil;
   - `normalizar_stack`;
@@ -57,14 +63,14 @@ Pasos, en orden:
   - render: primero los fragmentos de línea completa, después los placeholders, con `while read` y expansión de parámetros, sin sed;
   - `starter_commit`;
   - `escribir_lock`.
-- [ ] **4. `template/core/`:**
+- [x] **4. `template/core/`:**
   - `CLAUDE.md.tmpl`: 15 líneas o menos, sin referencias a `docs/spec.md` ni `docs/plan.md`, y sin `{{COMANDOS_STACK}}` ni `{{GOBIERNO}}`;
   - `dot-gitignore`: **ya existe** con `*:Zone.Identifier`; completarlo con `.claude/settings.local.json`, `CLAUDE.local.md` y los patrones `.env` que se decidan (C22);
   - `dot-gitattributes` (`* text=auto eol=lf`), `dot-claude/settings.json` (contenido de la sección 6) y `docs/brief.md`.
-- [ ] **5. `template/t1/`:**
+- [x] **5. `template/t1/`:**
   - `CLAUDE.md.tmpl`: 60 líneas o menos, con las secciones del Anexo A adaptadas y las líneas `{{COMANDOS_STACK}}` y `{{GOBIERNO}}`;
   - `docs/spec.md`, `docs/plan.md` y `docs/bitacora.md`.
-- [ ] **6. `bin/new-project`:** los 10 pasos del algoritmo de la sección 5:
+- [x] **6. `bin/new-project`:** los 10 pasos del algoritmo de la sección 5:
   - validar antes de escribir;
   - temporal con `mktemp -d` en la carpeta padre (con `--dry-run`, en `$TMPDIR`) y `trap` de limpieza;
   - permisos según la umask, segunda comprobación del destino y `mv -T`;
@@ -72,16 +78,16 @@ Pasos, en orden:
   - imprimir `git remote add`.
 
   Mientras no haya perfiles, cualquier `--stack` termina con error de perfil desconocido.
-- [ ] **7. `tests/smoke.sh`:**
+- [x] **7. `tests/smoke.sh`:**
   - `PROJECTS_ROOT=$(mktemp -d)` con `personal/` y `work/`;
   - `GIT_CONFIG_GLOBAL` apuntando a un archivo temporal con una identidad de prueba;
   - los checks de la tabla de abajo, con salida verde o roja por check, `exit 1` si alguno falla y menos de 30 s en total.
-- [ ] **8. `README.md` mínimo:** qué es, requisitos, uso con `PROJECTS_ROOT` y estado.
-- [ ] **9. Cierre:**
-  - verificación manual;
-  - revisión goldfish del diff, a mano, porque `/revisar-diff` es del Hito 2;
-  - actualizar este plan;
-  - proponer en el chat la entrada de bitácora, que vive en el repo `portfolio`.
+- [x] **8. `README.md` mínimo:** qué es, requisitos, uso con `PROJECTS_ROOT` y estado.
+- [x] **9. Cierre:**
+  - [x] verificación manual: `/memory` en un proyecto generado, hecha por Adrián: `/memory` lista el `CLAUDE.md` del proyecto y la identidad de git sale de `includeIf` por ruta (`bash -n` y `shellcheck` pasan);
+  - [x] revisión goldfish del diff, a mano, porque `/revisar-diff` es del Hito 2: 0 altos, 2 medios y 8 bajos. Aplicados: `git add -A -f` y árbol limpio tras el commit, trap que borra el destino hasta el commit, rutas con salto de línea, `.claude/` vacío, `-dirty` con ignorados y `--no-optional-locks`, y fixtures de composición en smoke. Sin aplicar: `[Unreleased]` se fecha con el tag del Hito 4; `date -d` de GNU es aceptable en Ubuntu;
+  - [x] actualizar este plan;
+  - [x] entrada de bitácora guardada en el anexo C del Dossier (sin publicar en el repo `portfolio`).
 
 Verificación del criterio de aceptación, con `tests/smoke.sh`:
 
@@ -113,6 +119,7 @@ Tareas:
 - [ ] Capas `t2` (PRD, ADR) y `t3` (CHANGELOG, fragmento de gobierno).
 - [ ] `tests/fixtures/` y verificación manual en `docs/verificacion.md`.
 - [ ] Smoke ampliado a los 4 Tiers (frontmatter y `sha256sum -c` de managed).
+- [ ] Pista del error de git en `new-project`: `git config --global --get-regexp '^includeif'` (sección 9 del Dossier, C20).
 
 ## Hito 3 · Perfiles y starter-diff
 
@@ -137,6 +144,7 @@ Tareas:
 Tareas:
 - [ ] Decidir idioma del README.
 - [ ] README completo, LICENSE (MIT) y CHANGELOG.
+- [ ] El README documenta como requisito previo la identidad de git por ruta: reglas `includeIf` para `~/projects/personal` y `~/projects/work`; sin ellas el primer commit de `new-project` falla y el destino se borra.
 - [ ] Búsqueda de secretos y datos personales.
 - [ ] Revisión goldfish del README y el árbol.
 - [ ] Generar la landing del portafolio y registrar lo que falte como issue.

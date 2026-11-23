@@ -1,0 +1,157 @@
+#!/usr/bin/env bash
+# Genera un proyecto nuevo a partir de las capas de template/.
+# Contrato y algoritmo: docs/dossier.md, secciones 5 y 6.
+set -euo pipefail
+
+STARTER_ROOT=$(cd -P "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=lib/common.sh
+. "$STARTER_ROOT/lib/common.sh"
+
+uso() {
+	cat <<'EOF'
+Uso: new-project <slug> --tipo personal|work --tier 0-3
+                 [--stack perfil1,perfil2] [--visibilidad publico|anonimizado|privado] [--dry-run]
+
+Crea $PROJECTS_ROOT/<tipo>/<slug> (PROJECTS_ROOT, por defecto ~/projects).
+La carpeta $PROJECTS_ROOT/<tipo> debe existir. Nunca sobrescribe un destino existente.
+EOF
+}
+
+# --- 1. Argumentos -------------------------------------------------------------
+SLUG='' TIPO='' TIER='' STACK_CRUDO='' VISIBILIDAD='' DRY_RUN=0
+while (($#)); do
+	case $1 in
+	-h | --help)
+		uso
+		exit 0
+		;;
+	--tipo | --tier | --stack | --visibilidad)
+		(($# >= 2)) || die "falta el valor de $1"
+		case $1 in
+		--tipo) TIPO=$2 ;;
+		--tier) TIER=$2 ;;
+		--stack) STACK_CRUDO=$2 ;;
+		--visibilidad) VISIBILIDAD=$2 ;;
+		esac
+		shift 2
+		;;
+	--dry-run)
+		DRY_RUN=1
+		shift
+		;;
+	-*) die "opción desconocida: $1 (ver --help)" ;;
+	*)
+		[[ -z $SLUG ]] || die "argumento sobrante: $1 (solo se admite un slug)"
+		SLUG=$1
+		shift
+		;;
+	esac
+done
+[[ -n $SLUG ]] || die "falta el slug (ver --help)"
+[[ -n $TIPO ]] || die "falta --tipo"
+[[ -n $TIER ]] || die "falta --tier"
+
+# --- 2. Validar sin escribir ---------------------------------------------------
+validar_slug "$SLUG"
+validar_tipo "$TIPO"
+validar_tier "$TIER"
+if [[ -z $VISIBILIDAD ]]; then
+	if [[ $TIPO == personal ]]; then VISIBILIDAD=publico; else VISIBILIDAD=privado; fi
+fi
+validar_visibilidad "$VISIBILIDAD"
+normalizar_stack "$STACK_CRUDO"
+metodologia_para_tier "$TIER"
+
+command -v sha256sum >/dev/null || die "falta sha256sum (coreutils)"
+command -v git >/dev/null || die "falta git"
+git_ver=$(git --version | sed -n 's/^git version \([0-9]*\)\.\([0-9]*\).*/\1 \2/p')
+read -r git_may git_min <<<"$git_ver"
+if [[ -z ${git_may:-} ]] || ((git_may < 2 || (git_may == 2 && git_min < 28))); then
+	die "se necesita git 2.28 o superior (por 'git init -b'); hay: $(git --version)"
+fi
+
+PROJECTS_ROOT=${PROJECTS_ROOT:-$HOME/projects}
+PADRE=$PROJECTS_ROOT/$TIPO
+DESTINO=$PADRE/$SLUG
+[[ -d $PADRE ]] || die "no existe la carpeta padre $PADRE (el generador no la crea)"
+[[ ! -e $DESTINO && ! -L $DESTINO ]] || die "el destino ya existe: $DESTINO"
+
+STARTER_VERSION=$(<"$STARTER_ROOT/VERSION")
+[[ $STARTER_VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "VERSION inválida: $STARTER_VERSION"
+
+# --- 3. Componer ---------------------------------------------------------------
+capas_para_tier "$TIER"
+componer
+
+epoch=$(date -u +%s)
+GENERATED_AT=$(date -u -d "@$epoch" +%Y-%m-%dT%H:%M:%SZ)
+FECHA=$(date -u -d "@$epoch" +%Y-%m-%d)
+starter_commit
+
+declare -A RENDER_VARS=(
+	[SLUG]=$SLUG [TIPO]=$TIPO [TIER]=$TIER [METODOLOGIA]=$METODOLOGIA
+	[STACK]=$STACK_NORMALIZADO [VISIBILIDAD]=$VISIBILIDAD [FECHA]=$FECHA
+)
+
+# --- 4. Temporal ---------------------------------------------------------------
+if ((DRY_RUN)); then
+	TMP=$(mktemp -d)
+else
+	TMP=$(mktemp -d "$PADRE/.new-project.XXXXXX")
+fi
+limpiar() { if [[ -n ${TMP:-} ]]; then rm -rf -- "$TMP"; fi; }
+trap limpiar EXIT
+
+# --- 5. Escribir archivos ------------------------------------------------------
+for ruta in "${RUTAS[@]}"; do
+	src=$STARTER_ROOT/template/${FUENTE[$ruta]}
+	mkdir -p "$TMP/$(dirname "$ruta")"
+	if es_managed "$ruta"; then
+		cp "$src" "$TMP/$ruta"
+	else
+		render "$src" "$TMP/$ruta" "template/${FUENTE[$ruta]}"
+	fi
+done
+
+# --- 6. Lock -------------------------------------------------------------------
+mkdir -p "$TMP/.claude"
+escribir_lock "$TMP/.claude/starter.lock"
+
+# --- 7. Dry-run ----------------------------------------------------------------
+if ((DRY_RUN)); then
+	printf '# Rutas que se generarían en %s\n' "$DESTINO"
+	printf '%s\n' "${RUTAS[@]}" .claude/starter.lock | LC_ALL=C sort
+	printf '\n# .claude/starter.lock\n'
+	cat "$TMP/.claude/starter.lock"
+	exit 0
+fi
+
+# --- 8. Permisos, segunda comprobación y mover ---------------------------------
+printf -v modo '%o' $((8#777 & ~8#$(umask)))
+chmod "$modo" "$TMP"
+[[ ! -e $DESTINO && ! -L $DESTINO ]] || die "el destino apareció durante la generación: $DESTINO"
+mv -T "$TMP" "$DESTINO"
+# Hasta que exista el commit, el trap borra el destino (fallo de git o interrupción).
+TMP=$DESTINO
+
+# --- 9. Git --------------------------------------------------------------------
+# -f: un core.excludesFile global no debe dejar fuera archivos generados.
+if ! (
+	cd "$DESTINO" &&
+		git init -q -b main &&
+		git add -A -f &&
+		git commit -q -m "chore: proyecto generado por project-starter v$STARTER_VERSION" &&
+		[[ -z $(git status --porcelain --ignored) ]]
+); then
+	die "git falló y se borró $DESTINO. Causas probables:
+  - commit.gpgsign activo sin agente de firma disponible;
+  - identidad de git ausente porque 'includeIf gitdir:' no aplica a esa ruta.
+Compruébalo con: git -C $PADRE config --show-origin user.email; git config --show-origin commit.gpgsign"
+fi
+TMP=''
+
+# --- 10. Siguiente paso --------------------------------------------------------
+if [[ $TIPO == personal ]]; then OWNER=jadriangz; else OWNER=${STARTER_WORK_OWNER:-<ORG>}; fi
+log "Proyecto creado en $DESTINO (Tier $TIER, $METODOLOGIA, visibilidad $VISIBILIDAD)."
+log "Para conectar el remoto, desde $DESTINO:"
+printf 'git remote add origin git@github-%s:%s/%s.git\n' "$TIPO" "$OWNER" "$SLUG"
