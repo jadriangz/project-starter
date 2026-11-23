@@ -110,10 +110,13 @@ Los skills solo se ejecutan cuando los invocas (`disable-model-invocation`), as�
 
 ## Por qué E/G
 
-Desde Tier 1, los proyectos siguen el método de trabajo que en el lock y en `CLAUDE.md` aparece como E/G (`metodologia=eg-ligero`):
-- primero se escribe qué se construye y cómo se acepta (spec y plan por hitos);
-- Claude construye un hito por sesión;
-- un **goldfish** revisa el resultado.
+E/G significa **Elephant/Goldfish**, un patrón de Dave Rensin (Google, abril de 2026):
+- **Elephant:** la sesión que lo recuerda todo, diseña y va guardando la memoria del proyecto en sus docs.
+- **Goldfish:** un revisor que no recuerda nada. Solo ve lo que se le entrega (el problema, un diseño o un diff), así que no arrastra el sesgo de lo que ya se decidió.
+
+En el lock aparece como `metodologia`:
+- Tier 1 usa E/G ligero (`eg-ligero`): un goldfish revisa el diff de cada hito.
+- Tiers 2 y 3 usan E/G completo (`eg`): el goldfish revisa también el diseño.
 
 El goldfish es el subagente `goldfish-revisor`, que no ve la conversación ni el `CLAUDE.md` y solo tiene herramientas de lectura. Recibe el criterio de aceptación y el diff (`/revisar-diff`) o el diseño (`/revisar-diseno`), y como no comparte el contexto de quien construyó, detecta lo que el autor da por sobrentendido. `/cierre-hito` corre los checks y actualiza el plan y la bitácora, pero nunca commitea.
 

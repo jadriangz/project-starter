@@ -4,6 +4,9 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y 
 
 ## [Unreleased]
 
+### Cambiado
+- README: explica qué es E/G (Elephant/Goldfish, patrón de Dave Rensin), con atribución, y la diferencia entre E/G ligero (Tier 1) y E/G completo (Tiers 2 y 3).
+
 ## [0.1.0] - 2026-11-23
 
 Primera versión pública.
