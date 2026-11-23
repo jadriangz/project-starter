@@ -2,7 +2,7 @@
 
 Derivado de la sección 7 de [`docs/dossier.md`](dossier.md). Los criterios de aceptación se copian literales; si cambian, cambian primero en el Dossier.
 
-- **Estado global:** Hito 0 cerrado (23 nov 2026). Hito 1 cerrado (23 nov 2026, commit `854f76a`): smoke 53/53, shellcheck limpio y `/memory` verificado a mano. Hito 2 cerrado (23 nov 2026, commit `7bd2fb6`): smoke verde en los 4 Tiers, spike sin Plan B y los skills verificados sobre fixtures. Hito 3 cerrado (23 nov 2026, commit `df56317`): smoke verde con stacks y los 11 estados de `starter-diff`; la prueba manual de carga de reglas del perfil `nextjs` pasó. Hito 4 en curso (23 nov 2026).
+- **Estado global:** Hito 0 cerrado (23 nov 2026). Hito 1 cerrado (23 nov 2026, commit `854f76a`): smoke 53/53, shellcheck limpio y `/memory` verificado a mano. Hito 2 cerrado (23 nov 2026, commit `7bd2fb6`): smoke verde en los 4 Tiers, spike sin Plan B y los skills verificados sobre fixtures. Hito 3 cerrado (23 nov 2026, commit `df56317`): smoke verde con stacks y los 11 estados de `starter-diff`; la prueba manual de carga de reglas del perfil `nextjs` pasó. Hito 4 cerrado (23 nov 2026, commit `798ed25`, tag `v0.1.0`): repo público y tag publicado en GitHub; Releases deshabilitado en el repo. **v0.1 terminada.**
 - **Regla:** una sesión de Claude Code por hito, en plan mode. El código del Hito 1 no empieza hasta cumplir el criterio del Hito 0.
 - **Cierre de cada hito:** checks verdes, `CLAUDE.md` del starter actualizado y entrada de bitácora.
 
@@ -12,7 +12,7 @@ Derivado de la sección 7 de [`docs/dossier.md`](dossier.md). Los criterios de a
 | 1 | Generador y capas base | 2 | Cerrado |
 | 2 | Subagente y skills | 1,5 | Cerrado |
 | 3 | Perfiles y starter-diff | 1 | Cerrado |
-| 4 | Publicación y primer uso real | 0,5 a 1 | Pendiente |
+| 4 | Publicación y primer uso real | 0,5 a 1 | Cerrado |
 
 ## Hito 0 · Contrato revisado
 
@@ -200,6 +200,11 @@ Tareas:
   - E/G ligado a `metodologia=eg-ligero`;
   - slug, visibilidad, remoto `personal`, `unset PROJECTS_ROOT` y variables de Odoo.
 - [x] Entrada de bitácora en el anexo C del Dossier.
-- [ ] Tag `v0.1.0` (local, tras el commit; subirlo y hacer público el repo, con confirmación).
+- [x] Tag `v0.1.0` sobre `798ed25`, subido a `origin` con confirmación de Adrián. El repo es público (`"visibility": "public"` en la API de GitHub, licencia detectada `MIT`). Adrián deshabilitó Releases en el repo, así que no hay release: la versión publicada es el tag.
+- [x] Verificación final contra el repo publicado:
+  - clon limpio desde GitHub siguiendo el README, con un `HOME` temporal: código 0, 1 commit, árbol limpio y `starter-diff` con 5 `limpio` y 8 `plantilla-sin-cambios`;
+  - smoke: 178 PASA, 0 fallas, 6 s;
+  - gitleaks sobre los 9 commits: sin hallazgos.
+- [x] Commit de la explicación de E/G (Elephant/Goldfish) en el README: `8be757a`, posterior al tag y anotado en `[Unreleased]`.
 
 **Siguiente paso, fuera del Hito 4:** la landing del portafolio, como proyecto propio en el Estudio (Dossier y Tier propios), generada después con `bin/new-project`.

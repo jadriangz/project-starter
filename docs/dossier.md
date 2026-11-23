@@ -321,6 +321,7 @@ Cinco hitos, de 5 a 6 sesiones de Claude Code en total. El código del Hito 1 no
 - Criterio de aceptación: clon limpio en un directorio temporal y quickstart del README en 3 comandos o menos; búsqueda de secretos y datos personales en todo el historial de git sin hallazgos; un goldfish con solo el README y el árbol del repo explica qué hace el starter; el README se valida de punta a punta, siguiendo solo sus instrucciones en el clon temporal (clonar, `new-project` y comprobar el resultado).
 - Riesgo: un README que solo entiende su autor. Lo cubre la revisión goldfish.
 - Cambio de criterio (inicio del Hito 4): sale "la landing se genera sin editar la estructura a mano" y entra la validación del README de punta a punta. Razón: la landing merece su propio Dossier y su clasificación en el Estudio; meterla aquí mezclaría dos proyectos y dejaría el cierre de la v0.1 sujeto a otro. La landing es el siguiente paso, fuera del Hito 4, y se generará después con `new-project`.
+- Estado: Cerrado (23 nov 2026, commit `798ed25`, tag `v0.1.0`). El repo es público y el tag está publicado en GitHub. Releases está deshabilitado en el repo por decisión de Adrián, así que la versión publicada es el tag, no una release.
 
 ## 8. Estrategia de pruebas y verificación
 
@@ -443,7 +444,7 @@ Lee CLAUDE.md y docs/dossier.md. Entra en plan mode.
 Señala cualquier ambigüedad o conflicto. No escribas código ni hagas commits hasta que apruebe el plan.
 ```
 
-**C. Entrada de bitácora (borrador)** para `content/projects/project-starter.md` en el repo `portfolio`
+**C. Entrada de bitácora (terminada)** para `content/projects/project-starter.md` en el repo `portfolio`
 
 ```markdown
 ---
@@ -451,15 +452,15 @@ slug: project-starter
 titulo: project-starter
 tipo: personal
 visibilidad: publico
-estado: en-curso
+estado: terminado
 inicio: 2026-11
-fin: null
+fin: 2026-11
 tier: 1
 metodologia: eg-ligero
 rol: Diseño, especificación y dirección de la construcción con Claude Code
 stack: [bash, markdown, claude-code]
 destacado: true
-enlaces: { repo: , demo: , caso: }
+enlaces: { repo: https://github.com/jadriangz/project-starter, demo: , caso: }
 ---
 
 ## Problema
@@ -472,7 +473,7 @@ Cada proyecto nuevo con Claude Code obligaba a rehacer la misma estructura de co
 - Lock en texto plano con hashes, para detectar divergencias sin jq ni Python.
 
 ## Solución
-Hito 1 (23 nov 2026): `bin/new-project` genera proyectos Tier 0 y 1 desde las capas `core` y `t1`, valida todo antes de escribir, construye en un temporal, mueve con `mv -T` y hace el primer commit; deja `.claude/starter.lock` con la versión, el commit del starter y los hashes. Hito 2 (23 nov 2026, commit `7bd2fb6`): subagente `goldfish-revisor` de solo lectura y sin `CLAUDE.md`; skills `/hito`, `/revisar-diff`, `/cierre-hito`, `/bitacora` y `/revisar-diseno`; capas `t2` (PRD y ADR) y `t3` (CHANGELOG y gobierno). Hito 3 (23 nov 2026, commit `df56317`): perfiles `nextjs` (Next.js 16), `supabase` (CLI v3) y `odoo-addon` (Odoo 19.0 y 20.0), cada uno con una regla que Claude carga solo al tocar archivos del stack y sus comandos en `CLAUDE.md`; y `bin/starter-diff`, que compara un proyecto con el starter actual en 11 estados, sin escribir nada, e imprime la línea del lock que hay que editar. Hito 4 (23 nov 2026): README completo (en español, con resumen en inglés), licencia MIT y CHANGELOG `0.1.0`, listos para publicar.
+Hito 1 (23 nov 2026): `bin/new-project` genera proyectos Tier 0 y 1 desde las capas `core` y `t1`, valida todo antes de escribir, construye en un temporal, mueve con `mv -T` y hace el primer commit; deja `.claude/starter.lock` con la versión, el commit del starter y los hashes. Hito 2 (23 nov 2026, commit `7bd2fb6`): subagente `goldfish-revisor` de solo lectura y sin `CLAUDE.md`; skills `/hito`, `/revisar-diff`, `/cierre-hito`, `/bitacora` y `/revisar-diseno`; capas `t2` (PRD y ADR) y `t3` (CHANGELOG y gobierno). Hito 3 (23 nov 2026, commit `df56317`): perfiles `nextjs` (Next.js 16), `supabase` (CLI v3) y `odoo-addon` (Odoo 19.0 y 20.0), cada uno con una regla que Claude carga solo al tocar archivos del stack y sus comandos en `CLAUDE.md`; y `bin/starter-diff`, que compara un proyecto con el starter actual en 11 estados, sin escribir nada, e imprime la línea del lock que hay que editar. Hito 4 (23 nov 2026, commit `798ed25`): README completo (en español, con resumen en inglés), licencia MIT y CHANGELOG `0.1.0`. El repo es público y la versión está publicada como tag [`v0.1.0`](https://github.com/jadriangz/project-starter/tree/v0.1.0); el repo no usa Releases.
 
 ## Cómo se usó Claude Code
 Planeación en el Estudio de Proyectos (clasificación por Tier y Dossier). Construcción con E/G ligero: revisión goldfish del contrato y del diff de cada hito. La del diff del Hito 1 se hizo a mano (0 altos, 2 medios, 8 bajos), antes de tener `/revisar-diff`. En el Hito 2, un spike con canarios comprobó el aislamiento antes de escribir los skills:
@@ -480,7 +481,7 @@ Planeación en el Estudio de Proyectos (clasificación por Tier y Dossier). Cons
 - uno en `CLAUDE.md`, para `omitClaudeMd`;
 - uno en el agente, para `agent:`.
 
-Los skills se verificaron con `claude -p` sobre fixtures con defectos sembrados. La revisión goldfish del diff dio 0 altos, 2 medios y 4 bajos, todos aplicados.
+Los skills se verificaron con `claude -p` sobre fixtures con defectos sembrados. La revisión goldfish del diff dio 0 altos, 2 medios y 4 bajos, todos aplicados. Antes de publicar, un goldfish que solo vio el README y el árbol del repo tuvo que explicar el starter. Lo que no pudo deducir se corrigió en el README.
 
 ## Resultados
 Hito 1: smoke con 53 checks en verde, shellcheck limpio y `/memory` verificado a mano en un proyecto generado. Hito 2: smoke verde en los 4 Tiers. Sobre los fixtures:
@@ -490,8 +491,17 @@ Hito 1: smoke con 53 checks en verde, shellcheck limpio y `/memory` verificado a
 - `/bitacora` omitió los nombres en modo anonimizado.
 
 En todos los casos, `git status` quedó idéntico. Hito 3: smoke con 178 checks en verde en 6 s, incluidas las combinaciones de stack y un proyecto manipulado que provoca los 11 estados de `starter-diff`. Dos mutaciones deliberadas (escribir en el proyecto y seguir enlaces simbólicos) hacen fallar el smoke. La revisión goldfish del diff dio 0 altos, 2 medios y 6 bajos, todos aplicados. Hito 4:
-- gitleaks 8.30.1 sobre todo el historial (`--log-opts=--all`) y sobre el árbol, más un grep de rutas y correos en `git log -p --all`: sin hallazgos;
-- el README se validó de punta a punta en un clon temporal, con un `HOME` temporal y la configuración `includeIf` copiada del propio README. El quickstart son 3 comandos, y `starter-diff` reporta todo `limpio` o `plantilla-sin-cambios`;
+- gitleaks 8.30.1 sobre todo el historial (`--log-opts=--all`, 9 commits) y sobre el árbol, más un grep de rutas y correos en `git log -p --all`: sin hallazgos;
+- clon limpio desde el repo público de GitHub, siguiendo el README con un `HOME` temporal y su configuración `includeIf`. El quickstart son 3 comandos y termina con código 0, 1 commit y árbol limpio. `starter-diff` reporta 5 `limpio` y 8 `plantilla-sin-cambios`;
+- `new-project` sin red (`unshare -rn`), un proyecto por Tier, cada uno con 1 commit y sin divergencias en `starter-diff`:
+
+  | Tier | Tiempo |
+  | --- | --- |
+  | 0 | 0,10 s |
+  | 1 | 0,18 s |
+  | 2 | 0,21 s |
+  | 3 | 0,21 s |
+- smoke final: 178 checks en verde, 0 fallas, 6 s, en Ubuntu 24.04.5 sobre WSL2;
 - la revisión goldfish con solo el README y el árbol explicó bien el starter. Veredicto: "con reservas", con 0 altos, 5 medios y 7 bajos, todos aplicados.
 
 ## Aprendizajes
