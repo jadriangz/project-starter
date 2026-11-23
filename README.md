@@ -1,6 +1,6 @@
 # project-starter
 
-Generador de proyectos para Claude Code. Con un solo comando crea la carpeta de un proyecto nuevo (`CLAUDE.md`, docs, reglas y permisos base) adaptada a su Tier de complejidad, con git inicializado y un primer commit, y deja en `.claude/starter.lock` de qué versión del starter salió.
+Generador de proyectos para Claude Code. Con un solo comando crea la carpeta de un proyecto nuevo (`CLAUDE.md`, docs, permisos base y, desde Tier 1, un subagente revisor goldfish y skills de flujo) adaptada a su Tier de complejidad, con git inicializado y un primer commit, y deja en `.claude/starter.lock` de qué versión del starter salió.
 
 ## Requisitos
 
@@ -25,8 +25,19 @@ bin/new-project mi-proyecto --tipo personal --tier 1
 
 - Nunca sobrescribe un destino existente: valida todo antes de escribir, construye en un directorio temporal y lo mueve al final.
 
-Pruebas: `tests/smoke.sh` (y `shellcheck bin/* lib/*.sh tests/*.sh` si está instalado).
+Pruebas: `tests/smoke.sh` (y `shellcheck bin/* lib/*.sh tests/*.sh tests/fixtures/*.sh` si está instalado). Los skills se verifican a mano sobre fixtures: `tests/fixtures/preparar.sh <caso>` y [`docs/verificacion.md`](docs/verificacion.md).
+
+## Tiers
+
+| Tier | Recibe |
+| --- | --- |
+| 0 | `CLAUDE.md` corto, `docs/brief.md`, `.gitignore`, `.gitattributes` y `.claude/settings.json` |
+| 1 | `CLAUDE.md` completo, `docs/spec.md`, `docs/plan.md`, `docs/bitacora.md`, el subagente `goldfish-revisor` y los skills `/hito`, `/revisar-diff`, `/cierre-hito` y `/bitacora` |
+| 2 | además `docs/prd.md`, plantilla de ADR y `/revisar-diseno` |
+| 3 | además `CHANGELOG.md` y una sección de gobierno en `CLAUDE.md` |
+
+Los skills solo se ejecutan cuando los invocas (`disable-model-invocation`). Los de revisión corren en el subagente `goldfish-revisor`, sin la conversación ni el `CLAUDE.md` y con herramientas de solo lectura.
 
 ## Estado
 
-v0.1 en construcción. Funcionan los Tiers 0 y 1 sin stack. Pendientes: subagente revisor y skills, Tiers 2 y 3, perfiles de stack (`--stack`) y `bin/starter-diff`. El diseño está en [`docs/dossier.md`](docs/dossier.md) y el avance en [`docs/plan.md`](docs/plan.md).
+v0.1 en construcción. Funcionan los Tiers 0 a 3 sin stack, con el subagente y los skills. Pendientes: perfiles de stack (`--stack`) y `bin/starter-diff`. El diseño está en [`docs/dossier.md`](docs/dossier.md) y el avance en [`docs/plan.md`](docs/plan.md).

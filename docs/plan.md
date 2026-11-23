@@ -2,15 +2,15 @@
 
 Derivado de la sección 7 de [`docs/dossier.md`](dossier.md). Los criterios de aceptación se copian literales; si cambian, cambian primero en el Dossier.
 
-- **Estado global:** Hito 0 cerrado (23 nov 2026). Hito 1 hecho (23 nov 2026): smoke 53/53, shellcheck limpio y `/memory` verificado a mano; pendiente el commit del starter.
+- **Estado global:** Hito 0 cerrado (23 nov 2026). Hito 1 cerrado (23 nov 2026, commit `854f76a`): smoke 53/53, shellcheck limpio y `/memory` verificado a mano. Hito 2 cerrado (23 nov 2026): smoke verde en los 4 Tiers, spike sin Plan B y los skills verificados sobre fixtures; pendiente el commit.
 - **Regla:** una sesión de Claude Code por hito, en plan mode. El código del Hito 1 no empieza hasta cumplir el criterio del Hito 0.
 - **Cierre de cada hito:** checks verdes, `CLAUDE.md` del starter actualizado y entrada de bitácora.
 
 | Hito | Nombre | Sesiones | Estado |
 | --- | --- | --- | --- |
 | 0 | Contrato revisado | 0,5 | Cerrado |
-| 1 | Generador y capas base | 2 | Hecho |
-| 2 | Subagente y skills | 1,5 | Pendiente |
+| 1 | Generador y capas base | 2 | Cerrado |
+| 2 | Subagente y skills | 1,5 | Cerrado |
 | 3 | Perfiles y starter-diff | 1 | Pendiente |
 | 4 | Publicación y primer uso real | 0,5 a 1 | Pendiente |
 
@@ -114,12 +114,25 @@ A mano:
 - **Riesgo:** dependen de comportamiento de Claude Code. La verificación manual queda documentada en `docs/verificacion.md`.
 
 Tareas:
-- [ ] Spike de `context: fork`, `agent`, `omitClaudeMd` e inyección con `!`.
-- [ ] Agente `goldfish-revisor` y skills de t1 y t2.
-- [ ] Capas `t2` (PRD, ADR) y `t3` (CHANGELOG, fragmento de gobierno).
-- [ ] `tests/fixtures/` y verificación manual en `docs/verificacion.md`.
-- [ ] Smoke ampliado a los 4 Tiers (frontmatter y `sha256sum -c` de managed).
-- [ ] Pista del error de git en `new-project`: `git config --global --get-regexp '^includeif'` (sección 9 del Dossier, C20).
+- [x] Spike de `context: fork`, `agent`, `omitClaudeMd` e inyección con `!`: las cuatro piezas funcionan en Claude Code 2.1.330, sin Plan B. Hallazgo: los skills con fork corren en segundo plano salvo con `background: false`.
+- [x] Agente `goldfish-revisor` y skills de t1 y t2.
+- [x] Capas `t2` (PRD, ADR) y `t3` (CHANGELOG, fragmento de gobierno).
+- [x] `tests/fixtures/` y verificación manual en `docs/verificacion.md`: los cuatro skills pasan y `git status` queda idéntico.
+- [x] Smoke ampliado a los 4 Tiers (frontmatter y `sha256sum -c` de managed).
+- [x] Pista del error de git en `new-project`: `git config --global --get-regexp '^includeif'` (sección 9 del Dossier, C20), cubierta en smoke.
+- [x] Prueba empírica de permisos sobre `.env` y `.env.example`, registrada en la sección 5 del Dossier. Abre una pregunta en la sección 9: si Claude debe poder mantener `.env.example`.
+- [x] Cierre: revisión goldfish del diff con un subagente de contexto limpio: cumple con reservas, 0 altos, 2 medios y 4 bajos, todos aplicados:
+  - `allowed-tools` restringido (después sustituido, ver abajo);
+  - fixture `cierre-hito-ok` para el camino verde, que cierra sin commitear;
+  - `preparar.sh` con limpieza ante errores, stderr visible y comprobación de la inserción del check;
+  - `/revisar-diseno` mencionado en `CLAUDE.md`;
+  - cerca de cuatro acentos graves para el diff.
+- [x] Entrada de bitácora en el anexo C del Dossier.
+- [x] Ajustes previos al commit:
+  - `allowed-tools`: la prueba mostró que `Bash(sed -n *)` preaprueba `sed -n -i`. Los skills leen con Grep y Read, y los comandos `!` usan reglas exactas; smoke prohíbe `*` en `allowed-tools`.
+  - `.env.example`: se mantiene el `deny` (pregunta de la sección 9 cerrada) y el `CLAUDE.md` generado lleva la convención de indicar la línea exacta de cada variable nueva.
+  - Fixtures revisados: sin cadenas con forma de secreto.
+- [ ] Commit, cuando se pida.
 
 ## Hito 3 · Perfiles y starter-diff
 

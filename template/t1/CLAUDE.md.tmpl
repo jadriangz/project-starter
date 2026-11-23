@@ -11,12 +11,14 @@ Proyecto {{TIPO}} · Tier {{TIER}} · metodología {{METODOLOGIA}} · visibilida
 ## Convenciones
 - Cambios pequeños, con mensaje claro; un tema por commit.
 - Nunca leer ni escribir secretos (`.env`, `secrets/`). Si hacen falta, pídelos.
+- Variables de entorno: no edites `.env.example` (el `deny` lo impide); si añades una variable, dime la línea exacta para que la añada yo.
 - Visibilidad {{VISIBILIDAD}}: no escribir en el repo nada que no pueda verse con esa visibilidad.
 
 ## Cómo trabajar aquí
 - Plan mode antes de cambios no triviales. Una sesión por hito de `docs/plan.md`.
 - Fuente de verdad: `docs/spec.md` (qué y por qué) y `docs/plan.md` (cuándo). Si el código y la spec difieren, preguntar.
 - Metodología {{METODOLOGIA}}: revisión goldfish (contexto limpio, solo criterio y diff) al cerrar cada hito.
+- Skills: `/hito N` (plan del hito), `/revisar-diff N` (goldfish del diff), `/cierre-hito N`, `/bitacora` y, desde Tier 2, `/revisar-diseno`.
 - No commitear sin que se pida.
 {{GOBIERNO}}
 

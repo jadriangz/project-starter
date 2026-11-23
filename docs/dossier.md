@@ -112,7 +112,12 @@ project-starter/
 | perfil `p` | `.claude/rules/stack-p.md` (con `paths:`) | `profiles/p/dot-claude/rules/stack-p.md` | M |
 | perfil `p` | Comandos del stack dentro de `CLAUDE.md`, solo Tier 1+ | `profiles/p/_fragmentos/comandos.md` | (en `CLAUDE.md`) |
 
-Además se genera `.claude/starter.lock`, que no se lista a sí mismo. Un perfil solo puede aportar su regla y su fragmento. El `CLAUDE.md` de core no referencia archivos que Tier 0 no tiene (`docs/spec.md`, `docs/plan.md`). Los nombres del agente y de los skills son contrato; su frontmatter es provisional hasta el spike del Hito 2, y todos los skills llevan `disable-model-invocation: true`.
+Además se genera `.claude/starter.lock`, que no se lista a sí mismo. Un perfil solo puede aportar su regla y su fragmento. El `CLAUDE.md` de core no referencia archivos que Tier 0 no tiene (`docs/spec.md`, `docs/plan.md`). Los nombres del agente y de los skills son contrato, y todos los skills llevan `disable-model-invocation: true`. Frontmatter validado en el spike del Hito 2:
+- **agente:** `tools: Read, Grep, Glob` (sin Bash) y `omitClaudeMd: true`;
+- **`revisar-diff` y `revisar-diseno`:** `context: fork`, `agent: goldfish-revisor` y `background: false`;
+- **`allowed-tools`:** solo reglas exactas, sin comodín, para los comandos `!` (por ejemplo `Bash(git diff HEAD)`). Una regla con prefijo como `Bash(sed -n *)` preaprueba también `sed -n -i`, que escribe (sección 5, Verificado). Lo que no es un comando `!` se lee con Read y Grep, que no necesitan preaprobación.
+
+Los managed no se renderizan, así que los skills leen del lock los datos del proyecto que necesitan (por ejemplo, la visibilidad).
 
 **Reglas de composición**
 
@@ -164,9 +169,20 @@ Los errores van a stderr y terminan con código distinto de 0. Las opciones se e
 - [Skills](https://code.claude.com/docs/en/skills): comandos fusionados en skills; campos `disable-model-invocation`, `context: fork` y `agent`.
 - [Subagentes](https://code.claude.com/docs/en/sub-agents): carpeta `.claude/agents/`, campos `tools` y `omitClaudeMd`, contexto nuevo en cada ejecución.
 - [Memoria y reglas](https://code.claude.com/docs/en/memory): `.claude/rules/` con `paths`, imports con `@` y tamaño recomendado de CLAUDE.md.
-- [Permisos](https://code.claude.com/docs/en/permissions), inicio del Hito 1: las reglas `Read` usan sintaxis gitignore relativa al directorio actual; según la página, `Read(.env)` y `Read(**/.env)` equivalen y casan cualquier `.env` en la raíz o por debajo. Que `Read(**/.env.*)` cubra `.env.local` y `.env.example` se infiere de la semántica glob; la página no lo dice literalmente.
+- [Permisos](https://code.claude.com/docs/en/permissions), inicio del Hito 1: las reglas `Read` usan sintaxis gitignore relativa al directorio actual; según la página, `Read(.env)` y `Read(**/.env)` equivalen y casan cualquier `.env` en la raíz o por debajo. **Prueba empírica (Hito 2, Claude Code 2.1.330, detalle en `docs/verificacion.md`):** con el `deny` de la sección 6 y un `allow` explícito de Read, Write, Edit y `Bash(cat *)`, Claude no pudo leer `.env` ni `.env.example`, ni hacer `cat .env.example`, ni editar o reescribir `.env.example`, ni crear `.env.local`; escribir `otro.txt` sí funcionó. Coincide con la página: "A `Read` deny rule also blocks the Edit and Write tools on the same path, including creating a new file there".
 - [Permisos](https://code.claude.com/docs/en/permissions): `Bash(git commit *)` sí cubre `git commit` sin argumentos ("A `*` at the end, with a space before it, also matches the bare command"), siempre que el `*` final sea el único comodín.
 - [Memoria](https://code.claude.com/docs/en/memory) y [Skills](https://code.claude.com/docs/en/skills): los `CLAUDE.md` de subdirectorios y los skills de `<subdir>/.claude/skills/` se cargan bajo demanda cuando Claude lee o edita un archivo de ese subárbol. Un `template/t1/CLAUDE.md` o un `template/t1/.claude/skills/` reales se inyectarían en las sesiones de trabajo sobre el starter, lo que confirma `dot-` y `.tmpl`. Los `settings.json` anidados no se aplican (solo el del directorio de trabajo).
+
+**Verificado en el Hito 2 (23 nov 2026, Claude Code 2.1.330; [Skills](https://code.claude.com/docs/en/skills), [Subagentes](https://code.claude.com/docs/en/sub-agents) y spike en `docs/verificacion.md`):**
+
+- `context: fork` con `agent: goldfish-revisor` ejecuta el cuerpo del skill en ese agente, sin el historial de la conversación. El spike lo confirmó con un canario sembrado en el chat que el agente no vio.
+- Los skills con fork corren en segundo plano por defecto (`background: true`). Con `background: false`, el resultado vuelve en el mismo turno.
+- `` !`cmd` `` se ejecuta antes de enviar el skill al modelo, también dentro de un bloque de código y con `$0` sustituido en el comando. Cada comando se evalúa contra los permisos antes de renderizar: si el resultado no es "allow" (por `allowed-tools` o por una regla `allow`), o si casa un `deny` o un `ask`, se aborta la invocación sin preguntar. Una salida distinta de 0 también la aborta.
+- `omitClaudeMd: true` (desde 2.1.271) omite los `CLAUDE.md` de usuario, proyecto y local. El spike lo confirmó con un canario en `CLAUDE.md`.
+- `disable-model-invocation: true` impide que Claude invoque el skill, incluso desde otro skill. Por eso `/cierre-hito` pide al usuario `/revisar-diff N` en lugar de invocarlo.
+- `allowed-tools` **preaprueba, no restringe**: "It does not restrict which tools are available: every tool remains callable". La concesión dura el turno que invoca el skill ("The grant clears when you send your next message"), y un `deny` o `ask` de settings sigue ganando. No da herramientas al agente de un skill con fork: el agente conserva las de su archivo. Para quitar herramientas existe `disallowed-tools`.
+- **Prueba empírica de `allowed-tools`** (detalle en `docs/verificacion.md`). Con `Bash(sed -n *) Bash(git diff *)` en un skill, Claude ejecutó sin preguntar `sed -n -i '1p' a.txt`, que truncó el archivo, y `git diff --no-index --output=salida.txt …`, que creó un archivo. Sin el skill, el mismo `sed -n -i` pidió aprobación. Una regla con prefijo se salta la detección de comandos que escriben; una regla sin `*` casa solo el comando exacto ("A rule with no `*` matches one exact command").
+- Los skills no aceptan `tools` ni `permissionMode`: la restricción de solo lectura va en el agente.
 
 ## 6. Datos e integraciones
 
@@ -246,7 +262,7 @@ En total, `starter-diff` tiene **11 estados**: 8 managed y 3 seeded.
 }
 ```
 
-Según la documentación, una regla `deny` siempre gana y una `ask` pregunta aunque exista un `allow` más específico. Los `deny` de lectura cubren las herramientas integradas y comandos reconocidos como `cat`, pero no un script que abra el archivo por su cuenta, y una regla de Bash no detecta formas como `git -C . push`. Son una red de seguridad, no un límite de seguridad. `Read(**/.env.*)` también bloquea `.env.example`; si un proyecto lo necesita, lo permite en su `settings.json`.
+Según la documentación, una regla `deny` siempre gana y una `ask` pregunta aunque exista un `allow` más específico. Los `deny` de lectura cubren las herramientas integradas y comandos reconocidos como `cat`, pero no un script que abra el archivo por su cuenta, y una regla de Bash no detecta formas como `git -C . push`. Son una red de seguridad, no un límite de seguridad. Verificado en el Hito 2: `Read(**/.env.*)` bloquea `.env.example` para leer, editar y crear, y también `cat` por Bash. Claude no puede mantener `.env.example`. Decidido (sección 9): se mantiene así; lo mantiene la persona, y el `CLAUDE.md` generado pide a Claude indicar la línea exacta de cada variable nueva.
 
 ## 7. Plan por hitos
 
@@ -265,7 +281,7 @@ Cinco hitos, de 5 a 6 sesiones de Claude Code en total. El código del Hito 1 no
 - Entregables: `bin/new-project`, `lib/common.sh`, capas `core` y `t1` (sin skills todavía), lock, primer commit, `tests/smoke.sh` para Tier 0 y 1 y README mínimo.
 - Criterio de aceptación: `tests/smoke.sh` verde para Tier 0 y 1; un destino existente, un slug inválido y una carpeta padre inexistente terminan con error y sin escribir nada; al abrir `claude` en un proyecto generado, `/memory` lista su `CLAUDE.md`.
 - Riesgo: sustitución de placeholders frágil. Smoke verifica cero `{{` restantes.
-- Estado: Hecho (23 nov 2026).
+- Estado: Cerrado (23 nov 2026).
 
 **Hito 2 · Subagente y skills (1,5 sesiones)**
 
@@ -307,7 +323,7 @@ Hay dos niveles: pruebas automáticas del generador, que no gastan cuota de Clau
 
 Comandos: `tests/smoke.sh` y, si está instalado, `shellcheck bin/* lib/*.sh tests/*.sh`. Criterio: salida verde en menos de 30 s.
 
-**Manuales sobre fixtures** (se registran en `docs/verificacion.md`):
+**Manuales sobre fixtures** (cada caso se prepara con `tests/fixtures/preparar.sh <caso>` y se registra en `docs/verificacion.md`):
 
 | Skill | Fixture | Resultado esperado |
 | --- | --- | --- |
@@ -329,7 +345,7 @@ El riesgo dominante es la deriva: que Claude Code cambie sus formatos o que los 
 | Riesgo | Mitigación |
 | --- | --- |
 | Claude Code cambia formatos de skills, agentes o permisos | Verificar la documentación vigente antes de tocar esas piezas; smoke valida el frontmatter; el lock registra la versión del starter |
-| El aislamiento goldfish no funciona como se documenta (`context: fork`, `omitClaudeMd`, inyección del diff) | Spike al inicio del Hito 2. Plan B: el skill pide al goldfish ejecutar `git diff` con una herramienta de solo lectura y el criterio se pega en el prompt, como en la plantilla E. Señal de alerta: el goldfish cita contexto del chat |
+| El aislamiento goldfish no funciona como se documenta (`context: fork`, `omitClaudeMd`, inyección del diff) | Spike hecho al inicio del Hito 2: las cuatro piezas funcionan y no se aplicó el Plan B (`docs/verificacion.md`). Plan B, si una versión futura lo rompe: el skill pide al goldfish ejecutar `git diff` con una herramienta de solo lectura y el criterio se pega en el prompt, como en la plantilla E. Señal de alerta: el goldfish cita contexto del chat. Repetir el spike al cambiar de versión mayor de Claude Code |
 | Los `deny` de lectura no frenan a un subproceso arbitrario (un script que abre `.env`) | Documentarlo en el README y evaluar el sandbox de Claude Code en WSL2 como mejora |
 | Alcance en el límite: de 5 a 6 sesiones estimadas | Si Alcance pasa a 2 el puntaje es 8 y sigue siendo Tier 1; si el total supera 8, se reclasifica a Tier 2 |
 | Proyectos que divergen del starter | Separación managed y seeded, y `starter-diff`. Alerta: más de 3 archivos managed modificados en un proyecto |
@@ -337,7 +353,7 @@ El riesgo dominante es la deriva: que Claude Code cambie sus formatos o que los 
 | Cuota de suscripción | Los skills de revisión corren solo por invocación explícita |
 | Un `{{` literal en una plantilla seeded (por ejemplo, en un bloque de código) hace fallar la generación, porque cualquier `{{` restante tras el render es error (goldfish Hito 0, C16) | No escribir `{{` en las plantillas; smoke genera todos los Tiers y lo detectaría. Si se necesita, se define un escape en una versión posterior |
 | Los seeded que el starter añade o retira después de generar un proyecto no se reportan: `starter-diff` solo da `retirado` y `nuevo-en-starter` para managed (C12) | Anotarlo en `CHANGELOG.md` cuando cambie la lista de seeded, para revisar a mano los proyectos existentes |
-| `git` falla en el primer commit (`commit.gpgsign` sin agente de firma, identidad ausente porque `includeIf` no aplica) y el generador borra el destino (C20) | El mensaje de error nombra estas dos causas probables y el comando para comprobarlas (`git config --show-origin user.email`). **Mejora (Hito 2):** cambiar la pista por `git config --global --get-regexp '^includeif'`, porque las reglas `includeIf gitdir:` solo se evalúan dentro de un repo y, cuando se muestra la pista, el destino ya se borró; la pista actual (`git -C <padre> config …`) no las evalúa |
+| `git` falla en el primer commit (`commit.gpgsign` sin agente de firma, identidad ausente porque `includeIf` no aplica) y el generador borra el destino (C20) | El mensaje de error nombra estas dos causas probables y los comandos para comprobarlas. **Aplicado en el Hito 2:** la pista es `git config --global --get-regexp '^includeif'` (y `git config --global --show-origin commit.gpgsign`), porque las reglas `includeIf gitdir:` solo se evalúan dentro de un repo y, cuando se muestra la pista, el destino ya se borró. Smoke comprueba la pista |
 
 **Supuestos** (si alguno es falso, avísame y se corrige):
 
@@ -351,7 +367,8 @@ El riesgo dominante es la deriva: que Claude Code cambie sus formatos o que los 
 
 - [ ] ¿README en español, inglés o bilingüe? Afecta al portafolio; se decide antes del Hito 4.
 - [ ] ¿Cuál es la ruta de addons de Odoo en el nuevo setup de WSL? La necesita el perfil `odoo-addon` (Hito 3).
-- [ ] ¿Se habilita el sandbox de Claude Code en WSL2? Se evalúa en los Hitos 2 y 3.
+- [ ] ¿Se habilita el sandbox de Claude Code en WSL2? No se evaluó en el Hito 2; queda para el Hito 3.
+- [x] ¿Debe Claude poder mantener `.env.example`? **Decidido (Hito 2):** no; se mantiene el `deny` actual. El `CLAUDE.md` generado (core y t1) lleva la convención: Claude no edita `.env.example` y, si añade una variable de entorno, indica la línea exacta para que la persona la añada.
 - [ ] ¿Qué organización de GitHub usan los proyectos de `work`? No se escribe en el repo: se da con `STARTER_WORK_OWNER`, y sin ella el generador imprime `<ORG>`.
 - [ ] ¿Cómo se registra en el lock una actualización aceptada (estados actualizado-sin-registrar, retirado y nuevo-en-starter)? ¿Un modo de `starter-diff` o edición manual de las entradas? Se decide en el Hito 3, junto con dos detalles de `starter-diff` que salieron en la revisión goldfish del Hito 0: un perfil retirado del starter debe dar `retirado` y no un error (C10); y `nuevo-en-starter` se evalúa en una pasada aparte, y si la ruta ya existe en el proyecto se reporta como conflicto (C14).
 - [x] ¿Cuál manda si difieren: los patrones de managed de la sección 6 o la columna "Lock" de la tabla de archivos por capa de la sección 5? (C13). **Decidido (Hito 1):** los patrones son normativos y la tabla descriptiva; smoke lleva la tabla esperada y comprueba que la clasificación por patrón coincide.
@@ -370,7 +387,7 @@ Generador de proyectos para Claude Code: crea ~/projects/personal|work/<slug> co
 ## Comandos
 - Generar: `bin/new-project <slug> --tipo personal|work --tier 0-3 [--stack nextjs,supabase] [--visibilidad publico|anonimizado|privado] [--dry-run]`
 - Comparar un proyecto con el starter: `bin/starter-diff <ruta-del-proyecto>`
-- Test: `tests/smoke.sh` · Lint: `shellcheck bin/* lib/*.sh tests/*.sh` (si está instalado)
+- Test: `tests/smoke.sh` · Lint: `shellcheck bin/* lib/*.sh tests/*.sh tests/fixtures/*.sh` (si está instalado) · Fixtures de skills: `tests/fixtures/preparar.sh <caso>`
 
 ## Estructura
 - `bin/` ejecutables · `lib/` funciones compartidas · `tests/` smoke y fixtures
@@ -434,14 +451,30 @@ Cada proyecto nuevo con Claude Code obligaba a rehacer la misma estructura de co
 - Lock en texto plano con hashes, para detectar divergencias sin jq ni Python.
 
 ## Solución
-Hito 1 (23 nov 2026): `bin/new-project` genera proyectos Tier 0 y 1 desde las capas `core` y `t1`, valida todo antes de escribir, construye en un temporal, mueve con `mv -T` y hace el primer commit; deja `.claude/starter.lock` con la versión, el commit del starter y los hashes. Pendiente: skills y subagente (Hito 2), perfiles y `starter-diff` (Hito 3).
+Hito 1 (23 nov 2026): `bin/new-project` genera proyectos Tier 0 y 1 desde las capas `core` y `t1`, valida todo antes de escribir, construye en un temporal, mueve con `mv -T` y hace el primer commit; deja `.claude/starter.lock` con la versión, el commit del starter y los hashes. Hito 2 (23 nov 2026): subagente `goldfish-revisor` de solo lectura y sin `CLAUDE.md`; skills `/hito`, `/revisar-diff`, `/cierre-hito`, `/bitacora` y `/revisar-diseno`; capas `t2` (PRD y ADR) y `t3` (CHANGELOG y gobierno). Pendiente: perfiles y `starter-diff` (Hito 3).
 
 ## Cómo se usó Claude Code
-Planeación en el Estudio de Proyectos (clasificación por Tier y Dossier). Construcción con E/G ligero: revisión goldfish del contrato y del diff de cada hito. La del diff del Hito 1 se hizo a mano (0 altos, 2 medios, 8 bajos), antes de tener `/revisar-diff`.
+Planeación en el Estudio de Proyectos (clasificación por Tier y Dossier). Construcción con E/G ligero: revisión goldfish del contrato y del diff de cada hito. La del diff del Hito 1 se hizo a mano (0 altos, 2 medios, 8 bajos), antes de tener `/revisar-diff`. En el Hito 2, un spike con canarios comprobó el aislamiento antes de escribir los skills:
+- uno en el chat, para `context: fork`;
+- uno en `CLAUDE.md`, para `omitClaudeMd`;
+- uno en el agente, para `agent:`.
+
+Los skills se verificaron con `claude -p` sobre fixtures con defectos sembrados. La revisión goldfish del diff dio 0 altos, 2 medios y 4 bajos, todos aplicados.
 
 ## Resultados
-Hito 1: smoke con 53 checks en verde, shellcheck limpio y `/memory` verificado a mano en un proyecto generado. Las métricas de la sección 3 del Dossier se llenarán al cerrar los hitos.
+Hito 1: smoke con 53 checks en verde, shellcheck limpio y `/memory` verificado a mano en un proyecto generado. Hito 2: smoke verde en los 4 Tiers. Sobre los fixtures:
+- `/revisar-diff` encontró el defecto sembrado;
+- `/revisar-diseno` listó las dos omisiones;
+- `/cierre-hito` no commiteó, ni con el check en rojo ni en verde;
+- `/bitacora` omitió los nombres en modo anonimizado.
+
+En todos los casos, `git status` quedó idéntico. Las métricas de la sección 3 del Dossier se llenarán al cerrar los hitos.
 
 ## Aprendizajes
 Las reglas `includeIf gitdir:` solo se evalúan dentro de un repo: un diagnóstico de identidad hecho desde la carpeta padre no las ve. La identidad por ruta pasa a ser requisito documentado.
+
+Hito 2:
+- Los skills con `context: fork` corren en segundo plano salvo con `background: false`.
+- Un `deny` de `Read` también bloquea la edición y la creación del archivo. Con el `deny` actual, Claude no puede mantener `.env.example`.
+- Un canario por fuente de contexto es la forma más barata de probar el aislamiento de un subagente.
 ```

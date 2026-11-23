@@ -146,7 +146,8 @@ if ! (
 	die "git falló y se borró $DESTINO. Causas probables:
   - commit.gpgsign activo sin agente de firma disponible;
   - identidad de git ausente porque 'includeIf gitdir:' no aplica a esa ruta.
-Compruébalo con: git -C $PADRE config --show-origin user.email; git config --show-origin commit.gpgsign"
+Compruébalo con: git config --global --get-regexp '^includeif'; git config --global --show-origin commit.gpgsign
+(las reglas includeIf gitdir: solo se evalúan dentro de un repo; deben cubrir $PADRE/)"
 fi
 TMP=''
 

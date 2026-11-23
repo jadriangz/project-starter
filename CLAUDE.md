@@ -4,7 +4,7 @@ Generador de proyectos para Claude Code: crea ~/projects/personal|work/<slug> co
 ## Comandos
 - Generar: `bin/new-project <slug> --tipo personal|work --tier 0-3 [--stack nextjs,supabase] [--visibilidad publico|anonimizado|privado] [--dry-run]`
 - Comparar un proyecto con el starter: `bin/starter-diff <ruta-del-proyecto>`
-- Test: `tests/smoke.sh` · Lint: `shellcheck bin/* lib/*.sh tests/*.sh` (si está instalado)
+- Test: `tests/smoke.sh` · Lint: `shellcheck bin/* lib/*.sh tests/*.sh tests/fixtures/*.sh` (si está instalado) · Fixtures de skills: `tests/fixtures/preparar.sh <caso>`
 
 ## Estructura
 - `bin/` ejecutables · `lib/` funciones compartidas · `tests/` smoke y fixtures

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Smoke del generador (Hito 1: Tier 0 y 1). Nunca toca ~/projects:
+# Smoke del generador (Tiers 0 a 3). Nunca toca ~/projects:
 # todo se genera en un PROJECTS_ROOT temporal con una identidad git de prueba.
 set -euo pipefail
 
@@ -36,14 +36,25 @@ TABLA_T0='.claude/settings.json|core/dot-claude/settings.json|S
 .gitignore|core/dot-gitignore|S
 CLAUDE.md|core/CLAUDE.md.tmpl|S
 docs/brief.md|core/docs/brief.md|S'
-TABLA_T1='.claude/settings.json|core/dot-claude/settings.json|S
-.gitattributes|core/dot-gitattributes|S
-.gitignore|core/dot-gitignore|S
-CLAUDE.md|t1/CLAUDE.md.tmpl|S
-docs/bitacora.md|t1/docs/bitacora.md|S
-docs/brief.md|core/docs/brief.md|S
-docs/plan.md|t1/docs/plan.md|S
-docs/spec.md|t1/docs/spec.md|S'
+tabla() { printf '%s\n' "$@" | LC_ALL=C sort; } # el lock ordena por ruta con LC_ALL=C
+TABLA_T1=$(tabla '.claude/settings.json|core/dot-claude/settings.json|S' \
+	'.gitattributes|core/dot-gitattributes|S' \
+	'.gitignore|core/dot-gitignore|S' \
+	'CLAUDE.md|t1/CLAUDE.md.tmpl|S' \
+	'docs/bitacora.md|t1/docs/bitacora.md|S' \
+	'docs/brief.md|core/docs/brief.md|S' \
+	'docs/plan.md|t1/docs/plan.md|S' \
+	'docs/spec.md|t1/docs/spec.md|S' \
+	'.claude/agents/goldfish-revisor.md|t1/dot-claude/agents/goldfish-revisor.md|M' \
+	'.claude/skills/bitacora/SKILL.md|t1/dot-claude/skills/bitacora/SKILL.md|M' \
+	'.claude/skills/cierre-hito/SKILL.md|t1/dot-claude/skills/cierre-hito/SKILL.md|M' \
+	'.claude/skills/hito/SKILL.md|t1/dot-claude/skills/hito/SKILL.md|M' \
+	'.claude/skills/revisar-diff/SKILL.md|t1/dot-claude/skills/revisar-diff/SKILL.md|M')
+TABLA_T2=$(tabla "$TABLA_T1" \
+	'docs/prd.md|t2/docs/prd.md|S' \
+	'docs/adr/0000-plantilla.md|t2/docs/adr/0000-plantilla.md|S' \
+	'.claude/skills/revisar-diseno/SKILL.md|t2/dot-claude/skills/revisar-diseno/SKILL.md|M')
+TABLA_T3=$(tabla "$TABLA_T2" 'CHANGELOG.md|t3/CHANGELOG.md|S')
 
 seccion() { # seccion <lock> managed|seeded
 	if [[ $2 == managed ]]; then
@@ -116,9 +127,40 @@ verificar_proyecto() { # verificar_proyecto <proyecto> <tier> <max-lineas>
 		for f in docs/spec.md docs/plan.md docs/bitacora.md; do [[ ! -e $p/$f ]] || faltan+="(sobra)$f "; done
 	else
 		for f in docs/spec.md docs/plan.md docs/bitacora.md; do [[ -f $p/$f ]] || faltan+="$f "; done
-		[[ ! -e $p/docs/adr ]] || faltan+="(sobra)docs/adr "
 	fi
+	if ((t >= 2)); then
+		for f in docs/prd.md docs/adr/0000-plantilla.md; do [[ -f $p/$f ]] || faltan+="$f "; done
+	else
+		for f in docs/prd.md docs/adr .claude/skills/revisar-diseno; do [[ ! -e $p/$f ]] || faltan+="(sobra)$f "; done
+	fi
+	if ((t == 3)); then [[ -f $p/CHANGELOG.md ]] || faltan+="CHANGELOG.md "; else [[ ! -e $p/CHANGELOG.md ]] || faltan+="(sobra)CHANGELOG.md "; fi
 	if [[ -z $faltan ]]; then ok "estructura T$t"; else mal "estructura T$t" "$faltan"; fi
+
+	# Fragmento de gobierno: solo en Tier 3.
+	local gob=0
+	grep -qx '## Gobierno' "$p/CLAUDE.md" && gob=1
+	if ((gob == (t == 3))); then ok "gobierno T$t: $( ((gob)) && echo presente || echo ausente) en CLAUDE.md"; else mal "gobierno T$t"; fi
+
+	# Frontmatter de agentes y skills (§8): '---' en la línea 1, name = carpeta o
+	# archivo, description, y disable-model-invocation en cada skill. El agente
+	# es de solo lectura y sin CLAUDE.md.
+	local fm nombre malos=''
+	for f in "$p"/.claude/skills/*/SKILL.md "$p"/.claude/agents/*.md; do
+		[[ -f $f ]] || continue
+		if [[ $f == */SKILL.md ]]; then nombre=$(basename "$(dirname "$f")"); else nombre=$(basename "$f" .md); fi
+		fm=$(sed -n '1{/^---$/!q};1d;/^---$/q;p' "$f")
+		grep -qx "name: $nombre" <<<"$fm" && grep -q '^description: .' <<<"$fm" || malos+="${f#"$p"/} "
+		if [[ $f == */SKILL.md ]]; then
+			grep -qx 'disable-model-invocation: true' <<<"$fm" || malos+="(invocación)${f#"$p"/} "
+			# allowed-tools preaprueba por prefijo: con '*', 'sed -n *' deja pasar 'sed -n -i'.
+			! grep -q '^allowed-tools:.*\*' <<<"$fm" || malos+="(allowed-tools con *)${f#"$p"/} "
+		else
+			grep -qx 'omitClaudeMd: true' <<<"$fm" && grep -qx 'tools: Read, Grep, Glob' <<<"$fm" || malos+="(solo lectura)${f#"$p"/} "
+		fi
+	done
+	if ((t > 0)); then
+		if [[ -z $malos ]]; then ok "frontmatter T$t: agente y skills"; else mal "frontmatter T$t" "$malos"; fi
+	fi
 
 	if grep -rF '{{' --exclude-dir=.git "$p" >/dev/null; then mal "placeholders T$t" "$(grep -rnF '{{' --exclude-dir=.git "$p" | head -3)"; else ok "placeholders T$t: ningún '{{'"; fi
 
@@ -156,6 +198,8 @@ rechazo() { # rechazo <descripción> <raíz-a-observar> <args...>
 printf '== Generación\n'
 check "genera Tier 0 (personal)" "$NP" uno --tipo personal --tier 0
 check "genera Tier 1 (work)" "$NP" dos --tipo work --tier 1
+check "genera Tier 2 (work)" "$NP" ocho --tipo work --tier 2
+check "genera Tier 3 (personal, anonimizado)" "$NP" nueve --tipo personal --tier 3 --visibilidad anonimizado
 
 printf '\n== Tier 0\n'
 verificar_proyecto "$R/personal/uno" 0 15
@@ -164,6 +208,14 @@ verificar_lock "$R/personal/uno" "$TABLA_T0" uno personal 0 ninguna publico
 printf '\n== Tier 1\n'
 verificar_proyecto "$R/work/dos" 1 60
 verificar_lock "$R/work/dos" "$TABLA_T1" dos work 1 eg-ligero privado
+
+printf '\n== Tier 2\n'
+verificar_proyecto "$R/work/ocho" 2 60
+verificar_lock "$R/work/ocho" "$TABLA_T2" ocho work 2 eg privado
+
+printf '\n== Tier 3\n'
+verificar_proyecto "$R/personal/nueve" 3 60
+verificar_lock "$R/personal/nueve" "$TABLA_T3" nueve personal 3 eg anonimizado
 
 printf '\n== Visibilidad por defecto\n'
 check "personal → publico" grep -qx 'visibilidad=publico' "$R/personal/uno/.claude/starter.lock"
@@ -184,6 +236,8 @@ rechazo "opción desconocida" "$R" tres --tipo personal --tier 0 --color azul
 printf '\n== Fallo de git\n'
 printf '[user]\n\tname = Smoke\n\temail = smoke@example.invalid\n[commit]\n\tgpgsign = true\n[gpg]\n\tprogram = false\n' >"$R/gitconfig-firma"
 GIT_CONFIG_GLOBAL=$R/gitconfig-firma rechazo "commit fallido borra el destino" "$R" tres --tipo personal --tier 1
+err=$(GIT_CONFIG_GLOBAL=$R/gitconfig-firma "$NP" tres --tipo personal --tier 1 2>&1 >/dev/null || true)
+if [[ $err == *"git config --global --get-regexp '^includeif'"* ]]; then ok "commit fallido: la pista nombra las reglas includeIf globales (C20)"; else mal "commit fallido: pista includeIf (C20)" "$err"; fi
 
 printf '\n== Excludes global del usuario\n'
 printf 'docs/\n.claude/\n' >"$R/excludes"
@@ -215,7 +269,7 @@ copia c5 && : >"$R/c5/template/core/docs/con espacio.md"
 compone_falla "ruta con espacios" c5
 copia c6 && mkdir -p "$R/c6/template/t1/dot-claude/agents" && printf 'agente\n' >"$R/c6/template/t1/dot-claude/agents/a.md"
 salida=$("$R/c6/bin/new-project" seis --tipo personal --tier 1 --dry-run 2>/dev/null || true)
-if [[ $(sed -n '/^--managed--$/,/^--seeded--$/{/^--/d;p}' <<<"$salida" | cut -c67-) == .claude/agents/a.md ]]; then
+if sed -n '/^--managed--$/,/^--seeded--$/{/^--/d;p}' <<<"$salida" | cut -c67- | grep -qx .claude/agents/a.md; then
 	ok "composición: dot-claude/agents/… se clasifica managed por patrón (C13)"
 else
 	mal "composición: clasificación managed por patrón"
