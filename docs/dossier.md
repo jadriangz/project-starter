@@ -471,54 +471,36 @@ Cada proyecto nuevo con Claude Code obligaba a rehacer la misma estructura de co
 - Plantilla en capas por Tier: un cambio se hace una vez y cada proyecto recibe solo lo que su complejidad justifica.
 - Revisión goldfish como skills con contexto aislado, sin dependencias externas.
 - Lock en texto plano con hashes, para detectar divergencias sin jq ni Python.
+- Aplazado a propósito a la v0.2: el sandbox de Claude Code (cambia el contrato y exige probarlo en WSL2) y un modo para aceptar cambios desde `starter-diff` (escribiría en el lock y exige pruebas de escritura segura). La v0.1 solo reporta y sugiere la línea a editar.
 
 ## Solución
-Hito 1 (23 nov 2026): `bin/new-project` genera proyectos Tier 0 y 1 desde las capas `core` y `t1`, valida todo antes de escribir, construye en un temporal, mueve con `mv -T` y hace el primer commit; deja `.claude/starter.lock` con la versión, el commit del starter y los hashes. Hito 2 (23 nov 2026, commit `7bd2fb6`): subagente `goldfish-revisor` de solo lectura y sin `CLAUDE.md`; skills `/hito`, `/revisar-diff`, `/cierre-hito`, `/bitacora` y `/revisar-diseno`; capas `t2` (PRD y ADR) y `t3` (CHANGELOG y gobierno). Hito 3 (23 nov 2026, commit `df56317`): perfiles `nextjs` (Next.js 16), `supabase` (CLI v3) y `odoo-addon` (Odoo 19.0 y 20.0), cada uno con una regla que Claude carga solo al tocar archivos del stack y sus comandos en `CLAUDE.md`; y `bin/starter-diff`, que compara un proyecto con el starter actual en 11 estados, sin escribir nada, e imprime la línea del lock que hay que editar. Hito 4 (23 nov 2026, commit `798ed25`): README completo (en español, con resumen en inglés), licencia MIT y CHANGELOG `0.1.0`. El repo es público y la versión está publicada como tag [`v0.1.0`](https://github.com/jadriangz/project-starter/tree/v0.1.0); el repo no usa Releases.
+- `bin/new-project`: genera proyectos Tier 0 a 3, valida todo antes de escribir, construye en un temporal, mueve con `mv -T` y hace el primer commit. Deja `.claude/starter.lock` con versión, commit del starter y hashes.
+- Capas: subagente `goldfish-revisor` (solo lectura, sin `CLAUDE.md`); skills `/hito`, `/revisar-diff`, `/cierre-hito`, `/bitacora` y `/revisar-diseno`; PRD y ADR en `t2`; CHANGELOG y gobierno en `t3`.
+- Perfiles `nextjs` (Next.js 16), `supabase` (CLI v3) y `odoo-addon` (Odoo 19.0 y 20.0): cada uno con una regla que Claude carga solo al tocar archivos del stack.
+- `bin/starter-diff`: compara un proyecto con el starter actual en 11 estados, sin escribir nada, e imprime la línea del lock a editar.
+- Publicación: README (en español, con resumen en inglés), licencia MIT, CHANGELOG `0.1.0` y tag [`v0.1.0`](https://github.com/jadriangz/project-starter/tree/v0.1.0).
 
 ## Cómo se usó Claude Code
-Planeación en el Estudio de Proyectos (clasificación por Tier y Dossier). Construcción con E/G ligero: revisión goldfish del contrato y del diff de cada hito. La del diff del Hito 1 se hizo a mano (0 altos, 2 medios, 8 bajos), antes de tener `/revisar-diff`. En el Hito 2, un spike con canarios comprobó el aislamiento antes de escribir los skills:
-- uno en el chat, para `context: fork`;
-- uno en `CLAUDE.md`, para `omitClaudeMd`;
-- uno en el agente, para `agent:`.
-
-Los skills se verificaron con `claude -p` sobre fixtures con defectos sembrados. La revisión goldfish del diff dio 0 altos, 2 medios y 4 bajos, todos aplicados. Antes de publicar, un goldfish que solo vio el README y el árbol del repo tuvo que explicar el starter. Lo que no pudo deducir se corrigió en el README.
+Planeación en el Estudio de Proyectos (clasificación por Tier y Dossier). Construcción con E/G ligero: revisión goldfish del contrato y del diff de cada hito.
+- **Delegado en Claude Code:** implementación, tests, fixtures y las revisiones goldfish.
+- **Decisión y verificación humana:** clasificación y alcance, respuesta a cada pregunta abierta, aprobación de cada plan antes de escribir código, pruebas manuales en un proyecto generado (`/memory` y la carga de la regla de Next.js) y la publicación.
+- En el Hito 2, un spike con canarios comprobó el aislamiento antes de escribir los skills: uno en el chat (`context: fork`), uno en `CLAUDE.md` (`omitClaudeMd`) y uno en el agente (`agent:`).
+- Antes de publicar, un goldfish que solo vio el README y el árbol del repo tuvo que explicar el starter; lo que no pudo deducir se corrigió.
 
 ## Resultados
-Hito 1: smoke con 53 checks en verde, shellcheck limpio y `/memory` verificado a mano en un proyecto generado. Hito 2: smoke verde en los 4 Tiers. Sobre los fixtures:
-- `/revisar-diff` encontró el defecto sembrado;
-- `/revisar-diseno` listó las dos omisiones;
-- `/cierre-hito` no commiteó, ni con el check en rojo ni en verde;
-- `/bitacora` omitió los nombres en modo anonimizado.
-
-En todos los casos, `git status` quedó idéntico. Hito 3: smoke con 178 checks en verde en 6 s, incluidas las combinaciones de stack y un proyecto manipulado que provoca los 11 estados de `starter-diff`. Dos mutaciones deliberadas (escribir en el proyecto y seguir enlaces simbólicos) hacen fallar el smoke. La revisión goldfish del diff dio 0 altos, 2 medios y 6 bajos, todos aplicados. Hito 4:
-- gitleaks 8.30.1 sobre todo el historial (`--log-opts=--all`, 9 commits) y sobre el árbol, más un grep de rutas y correos en `git log -p --all`: sin hallazgos;
-- clon limpio desde el repo público de GitHub, siguiendo el README con un `HOME` temporal y su configuración `includeIf`. El quickstart son 3 comandos y termina con código 0, 1 commit y árbol limpio. `starter-diff` reporta 5 `limpio` y 8 `plantilla-sin-cambios`;
-- `new-project` sin red (`unshare -rn`), un proyecto por Tier, cada uno con 1 commit y sin divergencias en `starter-diff`:
-
-  | Tier | Tiempo |
-  | --- | --- |
-  | 0 | 0,10 s |
-  | 1 | 0,18 s |
-  | 2 | 0,21 s |
-  | 3 | 0,21 s |
-- smoke final: 178 checks en verde, 0 fallas, 6 s, en Ubuntu 24.04.5 sobre WSL2;
-- la revisión goldfish con solo el README y el árbol explicó bien el starter. Veredicto: "con reservas", con 0 altos, 5 medios y 7 bajos, todos aplicados.
+- Generación sin red (`unshare -rn`): 0,10 s (Tier 0), 0,18 s (Tier 1), 0,21 s (Tiers 2 y 3), cada proyecto con 1 commit y sin divergencias en `starter-diff`.
+- Smoke: 178 checks en verde en 6 s (Ubuntu 24.04.5 sobre WSL2), con combinaciones de stack y un proyecto manipulado que provoca los 11 estados de `starter-diff`. Dos mutaciones deliberadas hacen fallar el smoke.
+- Skills probados sobre fixtures con defectos sembrados: `/revisar-diff` encontró el defecto, `/revisar-diseno` listó las dos omisiones, `/cierre-hito` no commiteó y `/bitacora` omitió los nombres en modo anonimizado.
+- Revisiones goldfish: la del contrato encontró 35 hallazgos (7 altos) y, ya corregido, la segunda dio 0 altos; los diffs de los hitos 1 a 3 dieron 0 altos y todos los hallazgos se aplicaron.
+- Antes de publicar: gitleaks 8.30.1 sin hallazgos sobre el historial completo (9 commits, hasta `798ed25`) y el árbol, más un grep de rutas y correos; un clon limpio siguiendo solo el README termina con código 0, 1 commit y árbol limpio.
 
 ## Aprendizajes
-Las reglas `includeIf gitdir:` solo se evalúan dentro de un repo: un diagnóstico de identidad hecho desde la carpeta padre no las ve. La identidad por ruta pasa a ser requisito documentado.
-
-Hito 2:
-- Los skills con `context: fork` corren en segundo plano salvo con `background: false`.
-- Un `deny` de `Read` también bloquea la edición y la creación del archivo. Con el `deny` actual, Claude no puede mantener `.env.example`.
+- Un comodín en `allowed-tools` preaprueba más de lo que parece: con `Bash(sed -n *)` y `Bash(git diff *)`, Claude ejecutó sin preguntar `sed -n -i` (truncó un archivo) y `git diff --output` (creó otro). Los skills pasaron a reglas exactas y una regla de smoke prohíbe el `*`.
+- La documentación vigente cambió más de lo esperado: Supabase CLI v3 (2 nov 2026) pasó a local por defecto, y Odoo 20 movió los permisos de `ir.model.access.csv` a `ir.access.csv`. Una regla escrita de memoria habría salido mal; leer la página antes de cada viñeta es lo que hace confiable un perfil.
+- Las instrucciones «para probar» del README fallaban en una máquina real: un directorio temporal queda fuera de las reglas `includeIf` y el primer commit falla sin identidad global. El smoke no lo detectaba porque trae su propia identidad; seguir el README con un `HOME` temporal sí.
+- Las reglas `includeIf gitdir:` solo se evalúan dentro de un repo, así que un diagnóstico de identidad desde la carpeta padre no las ve.
+- Un `deny` de `Read` también bloquea editar o crear el archivo: Claude no puede mantener `.env.example` con el `deny` actual.
+- Una prueba de «solo lectura» basada en nombres de archivo y `git status` no detecta la reescritura de un archivo ya modificado; hace falta comparar contenido.
 - Un canario por fuente de contexto es la forma más barata de probar el aislamiento de un subagente.
-- Un comodín en `allowed-tools` preaprueba más de lo que parece: con `Bash(sed -n *)` y `Bash(git diff *)`, Claude ejecutó sin preguntar `sed -n -i`, que truncó un archivo, y `git diff --output`, que creó otro. Fuera del skill, el mismo `sed -n -i` pedía aprobación. Los skills pasaron a reglas exactas y a leer con Read y Grep, y una regla de smoke prohíbe `*` en `allowed-tools`.
 
-Hito 3:
-- La documentación vigente cambió más de lo esperado en el mismo año: Supabase CLI v3 (2 nov 2026) pasó a local por defecto con `--remote`, y Odoo 20 movió los permisos de `ir.model.access.csv` a `ir.access.csv`. Una regla escrita de memoria habría salido mal en ambos casos; leer la página antes de cada viñeta y dejar fuera lo no verificable es lo que hace confiable un perfil.
-- Una prueba de "solo lectura" basada en nombres de archivo y `git status` no detecta una reescritura de un archivo ya modificado; hace falta comparar contenido. Lo encontró el goldfish, y una mutación lo confirma.
-
-Hito 4:
-- Las instrucciones "para probar" del README fallaban en una máquina real. Un `PROJECTS_ROOT` temporal queda fuera de las reglas `includeIf`, y sin identidad global el primer commit falla. Smoke no lo detectaba porque siempre trae su propia identidad. Seguir el README al pie de la letra, con un `HOME` temporal, sí lo detecta.
-- El goldfish encontró lo que el autor da por sabido: `GIT_CONFIG_GLOBAL` pide git 2.32 aunque el requisito diga 2.28, no había criterio para elegir Tier y faltaba aclarar que el commit se hace en el destino final.
-- Sacar la landing del criterio de la v0.1 separa dos proyectos con ritmos distintos; la landing tendrá su propio Dossier.
 ```
